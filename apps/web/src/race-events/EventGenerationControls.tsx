@@ -14,7 +14,7 @@ export function EventGenerationControls({onCreation,onBusy,fixturePrompt}:{onCre
   const [profiles,setProfiles]=useState<Awaited<ReturnType<typeof loadPipelineProfiles>>>();
   const [refresh,setRefresh]=useState(0),[profileId,setProfileId]=useState('mock');
   const [text,setText]=useState(fixturePrompt),[source,setSource]=useState<'text'|'voice'>('text');
-  const [consent,setConsent]=useState(false),[busy,setBusy]=useState(false);
+  const [busy,setBusy]=useState(false);
   const [status,setStatus]=useState('Load a local fixture, or submit one generation attempt.');
   const [profileError,setProfileError]=useState(''),[transcript,setTranscript]=useState('');
   const [metrics,setMetrics]=useState<StageMetric[]>([]),[elapsed,setElapsed]=useState(0);
@@ -23,7 +23,7 @@ export function EventGenerationControls({onCreation,onBusy,fixturePrompt}:{onCre
   const mic=useSyncExternalStore(recorder.subscribe,recorder.getSnapshot);
   const active=useRef<Attempt|undefined>(undefined);
   const profile=profiles?.profiles.find(item=>item.id===profileId),live=profile?.mode==='live';
-  const available=Boolean(profile?.available&&(!live||(profiles?.liveUsage.enabled&&!profiles.liveUsage.busy&&profiles.liveUsage.attemptsRemaining>0&&consent))&&
+  const available=Boolean(profile?.available&&(!live||(profiles?.liveUsage.enabled&&!profiles.liveUsage.busy&&profiles.liveUsage.attemptsRemaining>0))&&
     (source==='text'||(!live||profiles?.transcription?.available)));
   useEffect(()=>{
     const controller=new AbortController();
@@ -31,8 +31,8 @@ export function EventGenerationControls({onCreation,onBusy,fixturePrompt}:{onCre
       .catch(()=>{if(!controller.signal.aborted){setProfiles(undefined);setProfileError('Server unavailable. Local fixtures and replay still work.');}});
     return()=>controller.abort();
   },[refresh]);
-  useEffect(()=>{setConsent(false);setDesign(undefined);},[profileId,text,source]);
-  useEffect(()=>{setText(fixturePrompt);setConsent(false);setDesign(undefined);},[fixturePrompt]);
+  useEffect(()=>{setDesign(undefined);},[profileId,text,source]);
+  useEffect(()=>{setText(fixturePrompt);setDesign(undefined);},[fixturePrompt]);
   useEffect(()=>()=>{const attempt=active.current;active.current=undefined;attempt?.controller.abort();recorder.cancel();},[recorder]);
   useEffect(()=>{
     if(!busy)return;
@@ -41,7 +41,7 @@ export function EventGenerationControls({onCreation,onBusy,fixturePrompt}:{onCre
   },[busy]);
   const finish=(attempt:Attempt,message:string,spec?:SafetyDrillSpec)=>{
     if(active.current!==attempt)return;
-    active.current=undefined;recorder.cancel();setBusy(false);onBusy(false);setConsent(false);setStatus(message);
+    active.current=undefined;recorder.cancel();setBusy(false);onBusy(false);setStatus(message);
     setElapsed((performance.now()-attempt.started)/1000);setRefresh(value=>value+1);
     if(spec)onCreation(spec);
   };
@@ -70,7 +70,7 @@ export function EventGenerationControls({onCreation,onBusy,fixturePrompt}:{onCre
       ...(live?{paidAttempt:{id:crypto.randomUUID(),confirmed:true}}:{})});
     if(!parsed.success){setStatus('Use one to ten words, at most 200 characters.');return;}
     const attempt:Attempt={controller:new AbortController(),request:parsed.data,started:performance.now(),submitted:source==='text'};
-    active.current=attempt;setBusy(true);onBusy(true);setConsent(false);setMetrics([]);setDesign(undefined);setTranscript('');setElapsed(0);return attempt;
+    active.current=attempt;setBusy(true);onBusy(true);setMetrics([]);setDesign(undefined);setTranscript('');setElapsed(0);return attempt;
   };
   const generate=async()=>{
     const attempt=begin();if(!attempt)return;setStatus('Preparing the safety drill…');
@@ -118,7 +118,6 @@ export function EventGenerationControls({onCreation,onBusy,fixturePrompt}:{onCre
     </>}
     {!live&&<p className="voice-mode-notice">Mock mode interprets the supported examples{source==='voice'?' as a simulated transcript, regardless of what you say':''}. No AI calls.</p>}
     {live&&<div className="paid-attempt"><p>Up to {source==='voice'?3:2} paid calls. Failed or cancelled dispatched calls may incur charges. {profiles?.liveUsage.attemptsRemaining} / {profiles?.liveUsage.maxAttempts} attempts remaining.</p>
-      <label><input type="checkbox" checked={consent} disabled={busy||!profile?.available||!profiles?.liveUsage.enabled||profiles.liveUsage.busy||profiles.liveUsage.attemptsRemaining===0} onChange={event=>setConsent(event.target.checked)}/>Allow this paid event attempt</label>
     </div>}
     {source==='text'?<button className="generate" disabled={busy||!available} onClick={()=>{void generate();}}>{live?'Generate safety drill':'Run mock drill pipeline'}</button>:
       <RecorderControls recorder={recorder} mode={live?'live':'mock'} setupDisabled={busy} disabled={busy?!['preparing','recording'].includes(mic.phase):!available}

@@ -17,7 +17,6 @@ function AssetGenerationLabPage() {
   const [spin,setSpin] = useState(false);
   const [profiles,setProfiles] = useState<PipelineProfile[]>([]);
   const [profileId,setProfileId] = useState('mock');
-  const [paidConsent,setPaidConsent] = useState(false);
   const [liveUsage,setLiveUsage] = useState<LiveUsage>();
   const [profileError,setProfileError] = useState('');
   const [refresh,setRefresh] = useState(0);
@@ -36,7 +35,7 @@ function AssetGenerationLabPage() {
   const requestId = useRef(0), started = useRef(0);
   const profile = profiles.find(item => item.id === profileId);
   const liveAttemptAvailable = Boolean(profile?.available && liveUsage?.enabled && !liveUsage.busy && liveUsage.attemptsRemaining > 0);
-  const canGenerate = !busy && Boolean(profile?.available) && (profile?.mode !== 'live' || (liveAttemptAvailable && paidConsent));
+  const canGenerate = !busy && Boolean(profile?.available) && (profile?.mode !== 'live' || liveAttemptAvailable);
   const terminal = events.at(-1);
   const providerDiagnostic = terminal?.type === 'failed' ? terminal.error.provider : undefined;
   useEffect(() => {
@@ -53,7 +52,6 @@ function AssetGenerationLabPage() {
     return () => controller.abort();
   },[refresh]);
   useEffect(() => () => {requestId.current++;pending.current?.abort();},[]);
-  useEffect(() => {setPaidConsent(false);},[text,profileId,geometryMode,refresh]);
   useEffect(() => {
     if (!busy) return;
     const timer = setInterval(() => setElapsed((performance.now()-started.current)/1000),100);
@@ -65,7 +63,6 @@ function AssetGenerationLabPage() {
       ...(profile.mode === 'live' ? {paidAttempt:{id:crypto.randomUUID(),confirmed:true}} : {}),
     });
     if (!input.success) {setStatus('Use one to ten words, at most 200 characters.');return;}
-    setPaidConsent(false);
     const id = ++requestId.current;
     const controller = new AbortController();pending.current = controller;
     started.current = performance.now();setElapsed(0);setBusy(true);setEvents([]);setMetrics([]);setDesign(undefined);
@@ -164,17 +161,14 @@ function AssetGenerationLabPage() {
           {profile?.mode === 'live' && <div className="paid-attempt">
             <p role="note">Paid attempt: up to two generation calls using the models and token limits above, plus free content screening. Rejected requests make no creation. Failed or cancelled calls may still incur charges.</p>
             {liveUsage && <p role="status">{liveUsage.enabled ? 'Paid lab enabled' : 'Paid lab disabled'} · {liveUsage.attemptsRemaining} / {liveUsage.maxAttempts} attempts remaining this server start.{liveUsage.busy ? ' Another paid attempt is running.' : ''}</p>}
-            {liveUsage?.attemptsRemaining === 0 && <p role="note">Allowance exhausted. Restart bun run dev:live deliberately to reset it.</p>}
-            <label><input type="checkbox" checked={paidConsent}
-              disabled={formBusy || !liveAttemptAvailable}
-              onChange={event => setPaidConsent(event.target.checked)}/> Allow this paid attempt</label>
+            {liveUsage?.attemptsRemaining === 0 && <p role="note">This server instance has no paid attempts remaining.</p>}
           </div>}
           <button className="generate" disabled={!canGenerate}>{busy ? 'Generating…' : profile?.mode === 'live' ? 'Generate · up to 2 paid calls' : 'Load mock example'}</button>
           {busy && <button type="button" className="generate secondary" onClick={() => pending.current?.abort()}>Cancel attempt</button>}
           </>}
           {inputSource==='voice'&&<VoiceLabPanel profile={profile} geometryMode={geometryMode} mockText={text} liveUsage={liveUsage} transcription={transcription}
             onBusy={setVoiceBusy} onComplete={setSpec} onRefresh={()=>setRefresh(value=>value+1)}
-            onUseText={transcript=>{setText(transcript);setInputSource('text');setPaidConsent(false);}}
+            onUseText={transcript=>{setText(transcript);setInputSource('text');}}
             onAttempt={attempt=>{
               const id=++requestId.current;
               setHistory(previous=>[sanitizeLabAttempt({...attempt,id}),...previous].slice(0,HISTORY_LIMIT));

@@ -10,8 +10,8 @@ export class LiveAttempts {
   private reportKeys = new Set<string>();
   private reportsPerRun = new Map<string,number>();
   constructor(private policy:LivePolicy = {enabled:false,maxAttempts:3}) {
-    if (!Number.isInteger(policy.maxAttempts) || policy.maxAttempts < 1 || policy.maxAttempts > 100) {
-      throw new Error('LIVE_MAX_ATTEMPTS must be an integer from 1 to 100');
+    if (!Number.isInteger(policy.maxAttempts) || policy.maxAttempts < 1 || policy.maxAttempts > 500) {
+      throw new Error('LIVE_MAX_ATTEMPTS must be an integer from 1 to 500');
     }
   }
   get status():LiveUsage {
@@ -20,7 +20,7 @@ export class LiveAttempts {
   }
   acquire(request:Pick<PipelineRequest,'paidAttempt'>,report?:ReportAdmission):() => void {
     if (!this.policy.enabled) throw new PipelineFailure('LIVE_DISABLED','Paid generation is disabled. Start bun run dev:live to opt in.');
-    if (!request.paidAttempt?.confirmed) throw new PipelineFailure('CONSENT_REQUIRED','Allow this paid attempt before generating.');
+    if (!request.paidAttempt?.confirmed) throw new PipelineFailure('CONSENT_REQUIRED','Paid attempt metadata is required before generating.');
     const id = request.paidAttempt.id;
     if (this.used.has(id)) throw new PipelineFailure('DUPLICATE_ATTEMPT','This paid attempt was already dispatched. It will not run again.');
     const reportKey = report ? JSON.stringify([report.runId,report.creationId]) : undefined;

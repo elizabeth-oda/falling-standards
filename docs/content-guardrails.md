@@ -10,7 +10,7 @@ Live input screening uses OpenAI's `omni-moderation-latest` endpoint. It applies
 
 The generation flow is:
 
-1. Validate input, profile and explicit consent; acquire the existing attempt allowance and single live slot.
+1. Validate input, profile and paid-attempt metadata; acquire the existing attempt allowance and single live slot.
 2. For voice, transcribe within the separate upload/transcription budget.
 3. Screen the input text before design generation. A creation transcript is not streamed until this succeeds.
 4. Generate and structurally validate the design.
@@ -20,11 +20,11 @@ The generation flow is:
 
 `ContentGuard` is replaceable; `CreationPipeline` never substitutes the mock guard for a missing live guard. `buildPipeline` constructs live moderation only when paid mode was explicitly enabled and a server key is configured. Health/profile reads and previews make no provider calls. The standalone transcription-only tool retains its existing behavior; reusing a transcript as a typed creation goes through input screening.
 
-## Timing, consent and failure behavior
+## Timing, admission and failure behavior
 
 Each screening has a 2.5-second ceiling within the existing 30-second generation deadline. The design model still has at most 8 seconds; geometry receives the remaining overall time, including time spent screening. Guards, generation, and voice cancellation share abort propagation; late approvals cannot release a result even if an adapter ignores cancellation.
 
-A successful live typed attempt makes up to two paid generation calls plus two free moderation requests. Voice adds one paid transcription call. One consent UUID and allowance reservation cover the entire attempt. Rejection, timeout or cancellation after admission consumes the attempt; there are no retries, repairs, refunds, alternate-model calls or automatically generated replacements.
+A successful live typed attempt makes up to two paid generation calls plus two free moderation requests. Voice adds one paid transcription call. One attempt UUID and allowance reservation cover the entire attempt. Rejection, timeout or cancellation after admission consumes the attempt; there are no retries, repairs, refunds, alternate-model calls or automatically generated replacements.
 
 Content blocks and model refusals use the existing `REFUSED` code and a fixed player message. Screening failures use `PROVIDER_UNAVAILABLE` with a distinct screening message; the overall deadline remains `TIMEOUT`, and user cancellation remains `CANCELLED`. Existing creation versions and stream schemas are unchanged.
 
@@ -41,7 +41,7 @@ Run `bun run dev` and open the Generation lab. Keep a mock profile selected.
 
 Those two exact phrases are deterministic UX fixtures, not an offline content classifier. They are never used as a live moderation fallback. Custom mock ideas otherwise retain the existing fixture behavior.
 
-Run `bun run build`, `bun run typecheck`, and `bun run test`. Automated coverage uses fake credentials and intercepted transports for moderation, response validation, category mapping, individual output fields, route coverage, aborts, deadlines, consent, single-slot accounting, client refusal handling and history redaction.
+Run `bun run build`, `bun run typecheck`, and `bun run test`. Automated coverage uses fake credentials and intercepted transports for moderation, response validation, category mapping, individual output fields, route coverage, aborts, deadlines, request admission, single-slot accounting, client refusal handling and history redaction.
 
 Automated tests use neutral placeholders and mocked moderation flags. They verify enforcement behavior, not classifier recall or false-positive rate. Any live content-quality evaluation should be separately scoped and explicitly authorized; no evaluation prompt corpus is included.
 

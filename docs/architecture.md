@@ -53,6 +53,8 @@ The generated object and the Voice Power Up are different things. The star grant
 
 Web paths abbreviated as `game/...` or `voice/...` are under `apps/web/src`.
 
+Pre-race setup opens with a short guided briefing: the current steering, boost, and item bindings are shown as large keycaps, with braking and the remaining bindings under **All controls**. Players can start immediately without voice, using the selected prepared drill, or open a separate hazard-reporting step for mode and microphone setup. The entire setup reflows and scrolls as one surface on smaller displays; returning from hazard setup releases the microphone.
+
 `MovementTest` is a historical name for the current main game. `CreationDemoPage`, `DemoGame`, `PlayerController`, and the v2 `RaceCreationHost` remain as older integration/regression code; they are not the page mounted by `GamePage`.
 
 ## Movement, appearance, and effects
@@ -90,11 +92,11 @@ Use the schema for the feature you are changing; do not cast a v3/v4 encounter i
 
 A key belongs in the ignored `apps/server/.env` locally or a Vercel Secret when hosted. Only server code uses it. The browser receives profiles, progress, validated results, and safe errors. Key presence alone does not enable paid calls.
 
-The application allows up to 8 seconds of recording, a separate 10 seconds for upload/transcription, then 30 seconds for generation. Design uses at most 8 seconds of that generation window; geometry gets the time left. A live voice attempt can make up to three API calls under one consent and allowance entry.
+The application allows up to 8 seconds of recording, a separate 10 seconds for upload/transcription, then 30 seconds for generation. Design uses at most 8 seconds of that generation window; geometry gets the time left. A live voice attempt can make up to three API calls under one attempt ID and allowance entry. Voice and generation clients add validated compatibility metadata automatically on deliberate submission in Live mode; these flows have no separate payment opt-in checkbox. Optional incident reports retain their own feature setting.
 
-Pause, restart, finish, and navigation cancel pending race requests, discard saved voice grants and waiting results, and reject stale results. A pause preserves an uncollected future star. Audio is kept in memory for the request. Lab comparison history and the race's last-result replay are also in memory; neither stores audio.
+Pause, restart, finish, and navigation cancel pending race voice requests, discard saved voice grants and waiting results, and reject stale results. A pause preserves an uncollected future star. Audio is kept in memory for the request. Lab comparison history and the race's last-result replay are also in memory; neither stores audio.
 
-Local live mode defaults to three attempts per server start. Hosted mode defaults to 100 per instance. These are temporary counters, not a durable or global spending cap. Read [voice setup](voice-input-plan.md#enable-live-ai-locally) or [deployment](deployment.md) before deliberately enabling paid calls.
+Local live mode defaults to three attempts per server start. Hosted mode defaults to 500 per instance. These are temporary counters, not a durable or global spending cap. Read [voice setup](voice-input-plan.md#enable-live-ai-locally) or [deployment](deployment.md) before deliberately enabling paid calls.
 
 ## Read next
 
@@ -112,6 +114,6 @@ The final race HUD sizing rules live in `apps/web/src/game/race-hud.css`, loaded
 
 Each created event can request its own incident report as soon as its retained snapshot becomes terminal, while the race continues. `MovementTest` observes history at the existing HUD cadence; `race-report-controller.ts` freezes the event data, serializes report requests, and caches both results and terminal failures outside the viewer. `RaceCreations` displays a headline, canonical per-racer facts, a departmental finding, and expandable inspection details. Active events remain provisional.
 
-Live reporting has a separate default-off run opt-in for up to two additional paid calls. Each report gets its own attempt UUID and consumes the existing server allowance and single live slot. A saved second voice grant waits to open its speaking window if a report already owns that slot. Reports defer their first submission during local voice work. Pause/reset/navigation cancel pending reports without retries; normal player landing does not cancel an event report or stop other racers' results from accumulating.
+Live reporting retains a separate default-off feature setting for up to two additional paid calls. Together with the six-call voice ceiling, a run can use up to eight paid calls. Each report gets its own attempt UUID and consumes the existing server allowance and single live slot. A saved second voice grant waits to open its speaking window if a report already owns that slot. Reports defer their first submission during local voice work. Pause/reset/navigation cancel pending reports without retries; normal player landing does not cancel an event report or stop other racers' results from accumulating.
 
 `POST /api/race-reports` validates a compact terminal-event summary and returns one structured report; `GET /api/race-reports/status` reads availability without a provider call. The model selects evidence and writes only the headline/finding. Shared contracts and canonical facts live in `packages/shared/src/race-reports.ts`; server orchestration lives in `apps/server/src/race-reports`. Neither the original prompt nor audio, transcripts, geometry, or positions enter report requests. See [the incident report design](race-incident-report-proposal.md) for boundaries and verification.

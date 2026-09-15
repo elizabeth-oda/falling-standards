@@ -15,7 +15,7 @@ export function registerLabRoutes(app:FastifyInstance,pipeline:CreationPipeline,
     if (!parsed.success || !profile) return reply.code(400).send({error:{code:'INVALID_REQUEST',message:'Use one to ten words and select a known profile.'}});
     if (profile.mode === 'live' && !allowedOrigin(request.headers.origin)) return reply.code(403).send({error:{code:'INVALID_REQUEST',message:'Paid requests must originate from the configured game site.'}});
     if (profile.mode === 'live' && !pipeline.liveEnabled) return reply.code(403).send({error:{code:'LIVE_DISABLED',message:'Paid generation is disabled. Start bun run dev:live to opt in.'}});
-    if (profile.mode === 'live' && !parsed.data.paidAttempt) return reply.code(400).send({error:{code:'CONSENT_REQUIRED',message:'Allow this paid attempt before generating.'}});
+    if (profile.mode === 'live' && !parsed.data.paidAttempt) return reply.code(400).send({error:{code:'CONSENT_REQUIRED',message:'Paid attempt metadata is required before generating.'}});
     if (!profile.available) return reply.code(503).send({error:{code:'NOT_CONFIGURED',message:profile.unavailableReason ?? 'Provider unavailable.'}});
     const controller = new AbortController();
     const disconnect = () => {if (!reply.raw.writableEnded) controller.abort();};

@@ -53,11 +53,11 @@ In the project's **Environment Variables** screen, add these for **Production**:
 | `OPENAI_API_KEY` | Secret | Paste the key directly into Vercel. |
 | `HOSTED_LIVE_ENABLED` | Config | `true` when you deliberately want live AI available; `false` disables it. |
 | `APP_ORIGIN` | Config | The exact production origin, such as `https://your-game.vercel.app`, without a trailing slash. |
-| `LIVE_MAX_ATTEMPTS` | Config, optional | `100`, or leave unset for the hosted default of 100 per server instance. Accepts 1-100. |
+| `LIVE_MAX_ATTEMPTS` | Config, optional | `500`, or leave unset for the hosted default of 500 per server instance. Accepts 1-500. |
 
 Do not copy the whole local `.env` into Vercel: its local allowance defaults to 3. Optional model and token settings are listed in the root `.env.example`.
 
-The host must identify the deployment as production (`VERCEL_ENV=production`), the enable flag must be true, and the configured origin must match. Preview deployments always remain mock-only. Each live attempt also needs consent in the game; adding the key or opening the site does not start generation.
+The host must identify the deployment as production (`VERCEL_ENV=production`), the enable flag must be true, and the configured origin must match. Preview deployments always remain mock-only. Players select Live AI and deliberately record a request; voice creation has no separate payment opt-in checkbox. Optional incident reports retain their own feature setting. The client attaches a fresh attempt ID and compatibility metadata automatically. Adding the key, opening the site, or selecting a mode does not start generation.
 
 ### Where the key lives
 
@@ -77,9 +77,9 @@ Saving a variable does not update an existing deployment. In Vercel:
 
 These steps rebuild the selected commit. To include code changes, first push those commits to the connected production branch (currently `main`), then use **Create Deployment** to deploy the latest `main` commit; pushes to `main` do not deploy automatically. Redeploying an old commit will not pick up newer code. See [Vercel's redeployment guide](https://vercel.com/docs/deployments/managing-deployments#redeploy-a-project).
 
-Verify health/profiles again. When you intentionally want a paid test, select Live AI, enable the microphone, confirm the run's paid attempt, and try one short prompt. The free checks above do not test provider credentials or model access.
+Verify health/profiles again. When you intentionally want a paid test, select Live AI, enable the microphone, and try one short prompt after collecting a star. The free checks above do not test provider credentials or model access.
 
-## What the 100-attempt allowance means
+## What the 500-attempt allowance means
 
 Each server instance holds its own count, used attempt IDs, and one live-request slot in memory. A voice attempt holds that slot across speech, design, and geometry and may make up to three paid calls. Failed or cancelled dispatched work counts; there are no automatic provider retries.
 
@@ -115,7 +115,7 @@ To rotate a key, save its replacement as a Secret, redeploy, then revoke the old
 
 ## Optional paid incident reports
 
-The game deploys `GET /api/race-reports/status` and `POST /api/race-reports` alongside existing voice/event APIs. Availability reads never call providers. Default development and previews remain mock-only; live reports require the same production/origin gates and a separate player opt-in. No additional credential or spending pool is introduced.
+The game deploys `GET /api/race-reports/status` and `POST /api/race-reports` alongside existing voice/event APIs. Availability reads never call providers. Default development and previews remain mock-only; live reports require the same production/origin gates and the separate, default-off incident-report setting. No additional credential or spending pool is introduced.
 
 One report may run after each event ends, up to two per run. Reporting adds up to two paid generation calls to the six-call voice ceiling; input/output moderation remains separately accounted. Every report consumes one entry in the existing allowance and shares the single live slot with voice creation. The local default of three attempts cannot cover two voice attempts plus two reports. Exhaustion retains authored reports; do not restart or redeploy to replenish it.
 

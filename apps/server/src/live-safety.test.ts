@@ -53,9 +53,9 @@ test('live mode without a key remains unavailable, and the allowance is bounded'
   const pipeline = buildPipeline({},true);
   await assert.rejects(pipeline.run(request()),code('NOT_CONFIGURED'));
   assert.equal(pipeline.liveUsage.attemptsUsed,0);
-  for (const value of ['0','101','NaN','1.5','']) assert.throws(() => buildPipeline({LIVE_MAX_ATTEMPTS:value}),/LIVE_MAX_ATTEMPTS/);
+  for (const value of ['0','501','NaN','1.5','']) assert.throws(() => buildPipeline({LIVE_MAX_ATTEMPTS:value}),/LIVE_MAX_ATTEMPTS/);
   assert.equal(buildPipeline({LIVE_MAX_ATTEMPTS:'1'}).liveUsage.maxAttempts,1);
-  assert.equal(buildPipeline({LIVE_MAX_ATTEMPTS:'100'}).liveUsage.maxAttempts,100);
+  assert.equal(buildPipeline({LIVE_MAX_ATTEMPTS:'500'}).liveUsage.maxAttempts,500);
 });
 
 test('one explicit attempt dispatches exactly two calls and rejects a replay without spending again', async () => {
@@ -70,7 +70,7 @@ test('one explicit attempt dispatches exactly two calls and rejects a replay wit
   assert.equal(calls,2);
 });
 
-test('missing or malformed consent is blocked before dispatch; early cancellation costs no allowance', async () => {
+test('missing or malformed dispatch metadata is blocked before dispatch; early cancellation costs no allowance', async () => {
   let calls = 0;
   const pipeline = livePipeline(async input => {calls++;return responseFor(input);});
   await assert.rejects(pipeline.run({...request(),paidAttempt:undefined}),code('CONSENT_REQUIRED'));
@@ -138,17 +138,17 @@ test('HTTP boundary rejects unconfirmed, malformed, and foreign-origin paid requ
   } finally {await app.close();}
 });
 
-test('100-attempt allowance and duplicate IDs belong to one in-memory instance', () => {
-  const attempts=new LiveAttempts({enabled:true,maxAttempts:100});
+test('500-attempt allowance and duplicate IDs belong to one in-memory instance', () => {
+  const attempts=new LiveAttempts({enabled:true,maxAttempts:500});
   const first=request();
   attempts.acquire(first)();
-  for (let i=1;i<100;i++) attempts.acquire(request())();
+  for (let i=1;i<500;i++) attempts.acquire(request())();
   assert.equal(attempts.status.attemptsRemaining,0);
   assert.throws(()=>attempts.acquire(first),code('DUPLICATE_ATTEMPT'));
   assert.throws(()=>attempts.acquire(request()),code('LIVE_LIMIT_REACHED'));
-  const anotherInstance=new LiveAttempts({enabled:true,maxAttempts:100});
+  const anotherInstance=new LiveAttempts({enabled:true,maxAttempts:500});
   anotherInstance.acquire(first)();
-  assert.equal(anotherInstance.status.attemptsRemaining,99);
+  assert.equal(anotherInstance.status.attemptsRemaining,499);
 });
 
 test('report admission shares the allowance, deduplicates each event, and caps reports per run', () => {

@@ -133,29 +133,117 @@
 .movement-test:has(.packaged-game){padding:14px}
 .packaged-game{height:calc(100dvh - 28px);min-height:620px}
 .in-game-toolbar a{color:#eaf0f8;text-decoration:none;padding:7px 10px;border:1px solid #71818a;font:11px var(--font-ui)}
-.race-setup{position:absolute;inset:16px;z-index:3;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;padding:24px;background:#172c3ef5;border:2px solid #f0c928;color:#eef0e4}
-.race-setup h1{font:700 28px var(--font-ui);letter-spacing:0;margin:16px 0 22px}
+
+/* The expanded settings briefing shares the same instructions as race setup. */
+.race-detail .race-briefing-steps{padding-left:22px;margin:10px 0 18px;color:#d5dfdf;font-size:14px;line-height:1.6}
+.race-detail .race-briefing-steps li{padding:6px 0}
+.race-detail .race-briefing-steps strong{color:#fff0a2}
+.race-detail .race-essential-controls{padding:12px;border-left:3px solid #f0c928;background:#233b4a}
+.race-detail .race-microphone-check{margin:0 0 16px;padding-bottom:14px;border-bottom:1px solid #71818a}
+.race-detail .race-microphone-check p{margin:8px 0}
+
+/* Guided launch: one scrolling surface for the entire setup, including its actions. */
+.movement-test:has(.race-setup) .packaged-game{min-height:0}
+.race-setup{
+  position:absolute;inset:0;z-index:3;overflow:auto;overscroll-behavior:contain;
+  box-sizing:border-box;padding:20px 32px 28px;background:#142c3e;
+  border-top:2px solid #f0c928;color:#eef0e4;font:18px/1.5 var(--font-ui);
+}
+.race-setup-content{width:min(100%,1000px);min-width:0;margin:0 auto}
+.race-setup-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 20px}
+.race-setup-heading .eyebrow{margin:0;font-size:16px;letter-spacing:.08em}
+.race-setup h1{font:700 40px/1.15 var(--font-ui);letter-spacing:-.025em;margin:12px 0 8px}
 .race-setup h1:focus{outline:none}
-.race-setup-columns{flex:1;min-height:0;overflow:auto;padding-right:8px;overscroll-behavior:contain;display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,1fr);gap:32px}
-.race-setup summary{font-weight:700;cursor:pointer;padding:8px 0}
-.race-setup p,.race-briefing-steps{color:#d5dfdf;font-size:14px;line-height:1.6}
-.race-briefing-steps{padding-left:22px;margin:10px 0 18px}
-.race-briefing-steps li{padding:6px 0}
-.race-briefing-steps strong{color:#fff0a2}
-.race-essential-controls{padding:12px;border-left:3px solid #f0c928;background:#233b4a}
-.race-voice-setup{border-left:1px solid #71818a;padding-left:24px}
-.race-voice-setup h2{font-size:20px;margin:0 0 16px}
-.race-voice-setup label{display:block;font-size:13px}
-.race-voice-setup select{display:block;width:100%;box-sizing:border-box;margin:8px 0 12px;padding:10px;border:1px solid #789097;background:#243b49;color:#fff;font:inherit}
-.race-voice-setup .voice-consent{display:flex;gap:10px;align-items:center;margin:14px 0}
-.race-voice-setup .voice-mode-notice{padding:10px;margin:10px 0;border-radius:0}
-.race-microphone-check{margin:0 0 16px;padding-bottom:14px;border-bottom:1px solid #71818a}
-.race-microphone-check p{margin:8px 0}
+.race-setup p{color:#d5dfdf;font-size:18px;line-height:1.5;overflow-wrap:anywhere}
+.race-setup p.race-setup-lead{font-size:20px;margin:0 0 20px;color:#eef0e4}
+.race-setup small{font-size:16px;line-height:1.5;color:#c5d5dd}
+.race-setup button{min-height:56px;padding:12px 20px;font:700 18px/1.4 var(--font-ui);white-space:normal;overflow-wrap:anywhere}
+.race-setup button:disabled{opacity:.65}
+.race-setup .race-setup-heading button{min-height:44px;padding:8px 12px;font-size:16px;background:transparent;border-color:#7b94a1}
+.race-setup :is(button,select,summary):focus-visible{outline:3px solid #fff0a2;outline-offset:4px}
+.race-setup .begin-exercise{background:#f0c928;border-color:#f0c928;color:#172c3e;font-weight:800}
+.race-setup .begin-exercise:not(:disabled):hover{background:#ffe26a;border-color:#ffe26a}
+.race-setup button:not(.begin-exercise):not(:disabled):hover{background:#304c5f;border-color:#c7d7df}
+
+.race-control-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.race-control-card{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;gap:8px;padding:14px 16px;background:#203d50;border:1px solid #617f90}
+.race-control-keys{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;min-height:42px}
+.race-control-keys kbd{display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:42px;box-sizing:border-box;padding:4px 9px;background:#eef0e4;border:1px solid #fff;border-bottom:4px solid #a9bac0;color:#142c3e;font:700 24px/1 var(--font-mono);overflow-wrap:anywhere}
+.race-control-card strong{font-size:20px;line-height:1.3}
+.race-control-card small{display:block;text-align:center}
+
+.race-setup summary{min-height:44px;box-sizing:border-box;padding:10px 0;font-size:16px;font-weight:700;cursor:pointer;color:#eef0e4}
+.race-setup-all-controls{margin:6px 0 14px}
+.race-setup-all-controls p{margin:0 0 12px;font-size:16px;line-height:1.65}
+.race-setup-all-controls[open]{border-bottom:1px solid #617f90}
+.race-setup-launch-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.race-setup-launch-options>div{min-width:0}
+.race-setup-launch-options button{width:100%}
+.race-setup-launch-options p{font-size:16px;margin:8px 0 0}
+.race-setup p.race-setup-prepared-note{margin:14px 0 0;padding:12px 16px;border-left:3px solid #f0c928;background:#203d50;font-size:16px;line-height:1.5}
+.race-setup-prepared-note strong{color:#fff0a2}
+
+.race-voice-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;list-style:none;padding:0;margin:20px 0 24px;counter-reset:voice-step}
+.race-voice-steps li{position:relative;min-width:0;padding:0 0 0 44px;counter-increment:voice-step}
+.race-voice-steps li::before{content:counter(voice-step);position:absolute;left:0;top:0;display:grid;place-items:center;width:32px;height:32px;background:#f0c928;color:#172c3e;font-size:18px;font-weight:800}
+.race-voice-steps strong{display:block;font-size:18px;line-height:1.4}
+.race-voice-steps span{display:block;color:#c5d5dd;font-size:16px;line-height:1.5;margin-top:6px}
+.race-voice-setup{min-width:0}
+.race-voice-setup-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+.race-voice-card{min-width:0;padding:20px;border:1px solid #617f90;background:#203d50}
+.race-voice-card h2{font-size:24px;line-height:1.25;margin:0 0 18px}
+.race-voice-card p{margin:12px 0}
+.race-voice-card label{display:block;font-size:18px;font-weight:700}
+.race-voice-setup select{display:block;width:100%;max-width:100%;min-height:48px;box-sizing:border-box;margin:8px 0 12px;padding:10px 12px;border:1px solid #94acb8;background:#142c3e;color:#fff;font:400 18px/1.4 var(--font-ui)}
+.race-voice-setup select:disabled{opacity:.65}
+.race-voice-setup .voice-mode-notice{padding:12px;margin:16px 0;border:1px solid #89a0ad;border-radius:0;background:#142c3e;color:#e5edf0;font-size:16px}
+.race-voice-setup .voice-mode-notice strong{color:#fff0a2;font-size:18px}
+.race-voice-setup .voice-mode-notice p{font-size:16px}
+.race-prepared-prompt{padding-left:12px;border-left:3px solid #f0c928}
+.race-voice-setup .race-prepared-prompt,.race-voice-setup .race-voice-cost,.race-voice-setup .race-microphone-lifecycle{font-size:16px}
+.race-voice-setup .race-microphone-check{margin:0;padding:0;border:0}
+.race-voice-setup .race-microphone-check button{width:100%;background:#eef0e4;border-color:#eef0e4;color:#172c3e}
+.race-voice-setup .race-microphone-check button:not(:disabled):hover{background:#fff;border-color:#fff;color:#172c3e}
+.race-voice-setup .race-microphone-check p{margin:14px 0}
+.race-voice-setup .race-microphone-check small{display:block;margin-top:12px}
+.race-voice-details{margin-top:12px;border-top:1px solid #617f90}
+.race-voice-details p,.race-voice-details label{font-size:16px}
+.race-voice-details button{margin:8px 0}
 .race-voice-limits{display:block;margin-top:12px}
-.race-setup-actions{flex:none;border-top:1px solid #71818a;margin-top:22px;padding-top:8px}
-.race-setup-actions>div{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
-.race-setup .begin-exercise{background:#f0c928;color:#172c3e;font-weight:700}
-@media(max-width:800px){.race-setup{inset:8px;padding:16px}.race-setup-columns{grid-template-columns:1fr;gap:20px}.race-voice-setup{border-left:0;border-top:1px solid #71818a;padding:20px 0 0}.race-setup h1{font-size:24px}.race-setup-actions>div{flex-direction:column}.packaged-game{min-height:620px}}
+.race-voice-setup .race-voice-error{padding:12px;border-left:3px solid #ffb4a8;background:#482e34;color:#ffe4de;font-size:16px}
+.race-voice-setup .race-voice-error p{color:inherit;font-size:16px;margin:0 0 12px}
+.race-setup-actions{border-top:1px solid #617f90;margin-top:24px;padding-top:16px}
+.race-setup-actions>p{margin:0 0 14px;font-size:18px}
+.race-setup-actions>div{display:flex;flex-wrap:wrap;gap:12px}
+.race-setup-actions>div>button{flex:1 1 240px}
+.race-setup-actions>small{display:block;margin-top:12px}
+
+@media(max-width:760px){
+  .race-setup{padding:16px 20px 24px}
+  .race-setup-heading{align-items:flex-start}
+  .race-setup h1{margin-top:16px}
+  .race-control-cards{gap:10px}
+  .race-control-card{padding:14px 10px}
+  .race-control-keys{gap:4px}
+  .race-control-keys kbd{min-width:32px;padding:4px 6px}
+  .race-setup-launch-options,.race-voice-setup-grid{grid-template-columns:1fr;gap:18px}
+  .race-voice-steps{grid-template-columns:1fr;gap:18px}
+  .race-voice-steps li{min-height:32px}
+  .race-voice-steps span{margin-top:3px}
+  .race-setup-actions>div{flex-direction:column}
+  .race-setup-actions>div>button{flex:none;width:100%}
+}
+@media(max-width:480px){
+  .race-setup{padding:16px}
+  .race-setup-heading{gap:12px}
+  .race-setup-heading .eyebrow{letter-spacing:.04em}
+  .race-setup h1{font-size:36px}
+  .race-control-cards{grid-template-columns:1fr}
+  .race-control-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(70px,.7fr);gap:8px 16px;text-align:left;padding:14px 16px}
+  .race-control-keys{justify-content:flex-start}
+  .race-control-card small{grid-column:1/-1;text-align:left}
+  .race-voice-card{padding:16px}
+}
 
 /* Ground inspection results stay readable alongside the landing scene. */
 .race-result{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;white-space:normal;max-width:calc(100% - 40px)}

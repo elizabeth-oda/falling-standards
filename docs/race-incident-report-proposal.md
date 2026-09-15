@@ -52,9 +52,9 @@ Live run setup has a separate, default-off option:
 
 **Include an AI incident report when each event ends — up to 2 additional paid calls.**
 
-Existing voice consent still covers only two voice attempts and up to six paid calls. With both features enabled, a run may make up to eight paid calls: six for voice creation and two for reports. Each report also uses the existing input/output content guards, so moderation requests are separate from the count of paid generation calls.
+Voice creation permits two attempts and up to six paid calls without a separate payment checkbox. The incident-report feature retains its own default-off setting. With both features enabled, a run may make up to eight paid calls: six for voice creation and two for reports. Each report also uses the existing input/output content guards, so moderation requests are separate from the count of paid generation calls.
 
-Reports consume the same allowance as voice attempts and use the same `LiveAttempts` object. No additional busy slot or spending pool is created. Local defaults remain three admitted attempts per server start; hosted defaults remain 100 per instance. Consequently, the local default cannot fund two full voice attempts and two reports in one server session. Unavailable capacity produces the authored report. Do not restart a live server to replenish it.
+Reports consume the same allowance as voice attempts and use the same `LiveAttempts` object. No additional busy slot or spending pool is created. Local defaults remain three admitted attempts per server start; hosted defaults are 500 per instance. Consequently, the local default cannot fund two full voice attempts and two reports in one server session. Unavailable capacity produces the authored report. Do not restart a live server to replenish it.
 
 Keep explicit local `--live`, production-only hosted enablement, exact origins, preview mock-only operation, server-side keys, and sanitized errors. Keys and report opt-in cannot independently enable a server in mock mode. Normal development and fixture/replay verification make no paid calls. Prepared drills from Play without voice also produce local authored reports, even if Live mode and report consent were selected before that choice.
 

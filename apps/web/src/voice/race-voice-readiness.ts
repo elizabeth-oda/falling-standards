@@ -10,12 +10,11 @@ export function paidVoiceAvailable(profiles?: PipelineProfiles): boolean {
     !profiles.liveUsage.busy && profiles.liveUsage.attemptsRemaining > 0);
 }
 
-export function raceVoiceReadiness({enabled, microphone, profiles, profileId, armed, error}: {
+export function raceVoiceReadiness({enabled, microphone, profiles, profileId, error}: {
   enabled: boolean;
   microphone: Pick<RecorderSnapshot, 'ready' | 'phase'>;
   profiles?: PipelineProfiles;
   profileId: string;
-  armed: boolean;
   error: string;
 }): VoiceReadiness {
   const blocked = (message: string): VoiceReadiness => ({ready: false, message});
@@ -28,12 +27,11 @@ export function raceVoiceReadiness({enabled, microphone, profiles, profileId, ar
   const profile = profiles.profiles.find(item => item.id === profileId);
   if (!profile?.available) return blocked('This creation mode is unavailable. Choose another mode or play without voice.');
   if (profile.mode === 'live') {
-    if (!profiles.transcription?.available || !profiles.liveUsage.enabled) return blocked('Live voice is unavailable. Choose Mock mode or play without voice.');
+    if (!profiles.transcription?.available || !profiles.liveUsage.enabled) return blocked('Live voice is unavailable. Choose Prepared hazard or play without voice.');
     if (profiles.liveUsage.busy) return blocked('Another AI attempt is running. Refresh availability in a moment.');
-    if (profiles.liveUsage.attemptsRemaining <= 0) return blocked('No paid attempts remain. Choose Mock mode or play without voice.');
-    if (!armed) return blocked('Allow up to two paid voice attempts before starting, or play without voice.');
+    if (profiles.liveUsage.attemptsRemaining <= 0) return blocked('No paid attempts remain. Choose Prepared hazard or play without voice.');
   }
   return {ready: true, message: profile.mode === 'live'
     ? 'Ready. Collect the yellow star, then hold Space to speak.'
-    : 'Ready for Mock mode. Your speech will not be interpreted.'};
+    : 'Ready for Prepared hazard. Your speech will not be interpreted.'};
 }
