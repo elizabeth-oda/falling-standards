@@ -1,3 +1,4 @@
+import { buildRaceReports } from './race-reports/bootstrap.js';
 import { buildApp } from './app.js';
 import { buildPipeline } from './generation/pipeline-bootstrap.js';
 import { resolveAPIKey } from './generation/pipeline-config.js';
@@ -17,9 +18,9 @@ export function buildHostedApp(env:NodeJS.ProcessEnv = process.env) {
     origin = parsed.origin;
   }
   // This allowance belongs to this instance only; cold starts/redeployments reset it.
-  const pipeline = buildPipeline({...env,LIVE_MAX_ATTEMPTS:env.LIVE_MAX_ATTEMPTS ?? '100'},liveEnabled);
+  const pipeline = buildPipeline({...env,LIVE_MAX_ATTEMPTS:env.LIVE_MAX_ATTEMPTS ?? '500'},liveEnabled);
   if (!liveEnabled) for (const profile of pipeline.profiles) {
     if (profile.mode === 'live') profile.unavailableReason = 'Paid generation is disabled on this deployment.';
   }
-  return buildApp({pipeline,allowedOrigin:value=>origin !== undefined && value === origin});
+  return buildApp({pipeline,reports:buildRaceReports(env,pipeline),allowedOrigin:value=>origin !== undefined && value === origin});
 }

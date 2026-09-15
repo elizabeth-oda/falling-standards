@@ -1,8 +1,7 @@
 import type { DrillImpact, SafetyDrillRecipe } from '@sky/shared';
 
-/** Same measured result for the per-racer lab card and the aggregate race report. */
 export function drillMetricSummary(family:SafetyDrillRecipe['family'],impact:DrillImpact,racerId?:string):string {
-  const count=(record:Record<string,number>={})=>racerId===undefined?Object.values(record).reduce((sum,value)=>sum+value,0):(record[racerId]??0);
+  const count=(record:Record<string,number>={})=>racerId===undefined?Object.values(record).reduce((sum,value)=>sum+value,0):(Object.hasOwn(record,racerId)?record[racerId]:0);
   switch(family) {
     case 'stampede': return `${count(impact.collisions)} equipment contacts · ${count(impact.blockedCollisions)} blocked · ${count(impact.draftSeconds).toFixed(1)} s drafting`;
     case 'rapids': return `${count(impact.currentSeconds).toFixed(1)} s riding currents`;

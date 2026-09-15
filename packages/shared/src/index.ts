@@ -13,3 +13,4 @@ export * from './race-event-pipeline.js';
 export * from './safety-drills.js';
 export * from './safety-drill-fixtures.js';
 export * from './safety-drill-pipeline.js';
+export * from './race-reports.js';

@@ -8,7 +8,7 @@ import { BuddyDrill } from './buddy-drill';
 import { OrbitDrill } from './orbit-drill';
 import { ReconstructionDrill } from './reconstruction-drill';
 import { ObservationDrill } from './observation-drill';
-import { createDrillBands, inDrillCourse, increment, midpoint, emptyDrillImpact, type DrillMechanic, type DrillBand } from './drill-mechanics';
+import { createDrillBands, inDrillCourse, increment, midpoint, emptyDrillImpact, emptyStepInputs, type DrillMechanic, type DrillBand } from './drill-mechanics';
 import { add, subtract, scale, length, direction, clampLength, contactTime, seededRandom, dot } from './math';
 
 type StampedeRecipe = Extract<SafetyDrillRecipe, {family:'stampede'}>;
@@ -19,13 +19,12 @@ type Actor = {
   reaction?:{startsAt:number;origin:EventVector;velocity:EventVector;state:'charging'|'scattering'};
 };
 type Band = DrillBand;
-const zeroInput = ():RacerEventInput => ({acceleration:[0,0,0],velocityDelta:[0,0,0],obstacleProtection:false});
 const currentPriority:Record<DrillCurrent['kind'],number>={eddy:0,fast:1,flow:2};
 function unsupportedBehavior(_recipe:never):never {
   throw new Error('Safety drill behavior has no runtime implementation.');
 }
 
-/** Closest point on a capsule's centre segment. Also used to keep force/render bounds identical. */
+/** Closest point on a capsule's centre segment. */
 export function closestDrillPoint(point:EventVector,from:EventVector,to:EventVector):EventVector {
   const delta=subtract(to,from),squared=dot(delta,delta);
   const t=squared===0?0:Math.max(0,Math.min(1,dot(subtract(point,from),delta)/squared));
@@ -47,7 +46,6 @@ class CourseDrill implements DrillMechanic {
     this.recipe=recipe;
     const random=seededRandom(seed);
     const bands=createDrillBands(racers);
-    // Adding a family must supply its own setup and tick behavior; never fall through to Rapids.
     switch(this.recipe.family) {
       case 'stampede':
         for(const band of bands)this.createHerd(this.recipe,band,random);
@@ -201,8 +199,7 @@ class CourseDrill implements DrillMechanic {
 
   prepareStep(age:number,dt:number,racers:readonly EventRacer[]):Record<string,RacerEventInput> {
     this.age=Math.min(age,this.config.durationSeconds);
-    const inputs:Record<string,RacerEventInput>=Object.create(null);
-    for(const racer of racers)inputs[racer.id]=zeroInput();
+    const inputs=emptyStepInputs(racers);
     const eligible=this.age<this.config.warningSeconds?[]:racers.filter(racer=>!racer.finished);
     switch(this.recipe.family) {
       case 'stampede': {

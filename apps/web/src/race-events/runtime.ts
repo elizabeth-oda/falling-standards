@@ -91,7 +91,6 @@ export class RaceEventRuntime implements RaceEventPort {
       const average=this.racers.reduce((sum,racer)=>sum+racer.velocity[1],0)/Math.max(1,this.racers.length);
       this.drift=[0,Math.max(-limits.maxAnchorSpeed,Math.min(0,average)),0];
     }
-    this.participants=this.racers.map(racer=>racer.id);
     if(effect.type==='debrisShower')this.emitDebrisWave();
   }
   private sideDirection(id:string):EventVector {

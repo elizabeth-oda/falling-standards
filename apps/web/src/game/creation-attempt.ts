@@ -16,8 +16,7 @@ export interface AttemptHost<T> {
   checkRequest?(stage:'recording'|'submission'):string | undefined;
   activate(spec:T):void;
 }
-// Owns one-attempt voice/generation state only. No player, geometry, input bindings,
-// obstacle state, movement integration, collision detection, or effect timers.
+// Owns one voice/generation attempt; the host owns gameplay.
 export class CreationAttempt<T extends {displayName:string}> {
   private listeners = new Set<() => void>();
   private abort?: AbortController;

@@ -15,8 +15,8 @@ export function validateAudio(audio:AudioClip) {
   }
   const b=Buffer.from(audio.bytes);
   const valid=audio.mimeType==='audio/webm' ? b.subarray(0,4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3]))
-    : audio.mimeType==='audio/mp4' ? b.toString('ascii',4,8)==='ftyp'
-    : b.toString('ascii',0,4)==='RIFF' && b.toString('ascii',8,12)==='WAVE';
+    : audio.mimeType==='audio/mp4' ? b.subarray(4,8).equals(Buffer.from('ftyp'))
+    : b.subarray(0,4).equals(Buffer.from('RIFF')) && b.subarray(8,12).equals(Buffer.from('WAVE'));
   if (!valid) throw new PipelineFailure('INVALID_AUDIO','The recording does not match its audio format.');
 }
 export const mockTranscriptionProvider:TranscriptionProvider = {

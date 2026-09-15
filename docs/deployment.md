@@ -53,11 +53,11 @@ In the project's **Environment Variables** screen, add these for **Production**:
 | `OPENAI_API_KEY` | Secret | Paste the key directly into Vercel. |
 | `HOSTED_LIVE_ENABLED` | Config | `true` when you deliberately want live AI available; `false` disables it. |
 | `APP_ORIGIN` | Config | The exact production origin, such as `https://your-game.vercel.app`, without a trailing slash. |
-| `LIVE_MAX_ATTEMPTS` | Config, optional | `100`, or leave unset for the hosted default of 100 per server instance. Accepts 1-100. |
+| `LIVE_MAX_ATTEMPTS` | Config, optional | `500`, or leave unset for the hosted default of 500 per server instance. Accepts 1-500. |
 
 Do not copy the whole local `.env` into Vercel: its local allowance defaults to 3. Optional model and token settings are listed in the root `.env.example`.
 
-The host must identify the deployment as production (`VERCEL_ENV=production`), the enable flag must be true, and the configured origin must match. Preview deployments always remain mock-only. Each live attempt also needs consent in the game; adding the key or opening the site does not start generation.
+The host must identify the deployment as production (`VERCEL_ENV=production`), the enable flag must be true, and the configured origin must match. Preview deployments always remain mock-only. Players select Live AI and deliberately record a request; there is no separate payment opt-in checkbox. The client attaches a fresh attempt ID and compatibility metadata automatically. Adding the key, opening the site, or selecting a mode does not start generation.
 
 ### Where the key lives
 
@@ -77,9 +77,9 @@ Saving a variable does not update an existing deployment. In Vercel:
 
 These steps rebuild the selected commit. To include code changes, first push those commits to the connected production branch (currently `main`), then use **Create Deployment** to deploy the latest `main` commit; pushes to `main` do not deploy automatically. Redeploying an old commit will not pick up newer code. See [Vercel's redeployment guide](https://vercel.com/docs/deployments/managing-deployments#redeploy-a-project).
 
-Verify health/profiles again. When you intentionally want a paid test, select Live AI, enable the microphone, confirm the run's paid attempt, and try one short prompt. The free checks above do not test provider credentials or model access.
+Verify health/profiles again. When you intentionally want a paid test, select Live AI, enable the microphone, and try one short prompt after collecting a star. The free checks above do not test provider credentials or model access.
 
-## What the 100-attempt allowance means
+## What the 500-attempt allowance means
 
 Each server instance holds its own count, used attempt IDs, and one live-request slot in memory. A voice attempt holds that slot across speech, design, and geometry and may make up to three paid calls. Failed or cancelled dispatched work counts; there are no automatic provider retries.
 
@@ -112,3 +112,13 @@ The API's `outputDirectory: "."` is intentional. Vercel CLI 59.11.7 otherwise di
 Set `HOSTED_LIVE_ENABLED=false` and redeploy to disable live AI on the new deployment. Old deployments retain their old variables; keep their URLs protected. Revoke the provider key if you need to stop new calls across old deployments too. Already-dispatched work may finish and incur charges.
 
 To rotate a key, save its replacement as a Secret, redeploy, then revoke the old key. For rollback, choose a known-good mock-only deployment. Never paste keys or raw provider errors into reports.
+
+## Incident-report operation
+
+The game release also serves `POST /api/race-reports` and `GET /api/race-reports/status`. The status route is a free configuration read. Default and preview environments cannot dispatch live reports, even when keys exist.
+
+Players may separately enable **Include an AI incident report after the race — 1 additional paid call** before a live run. A single request batches one or two final voice creations after every racer lands. It shares the existing live-request slot and consumes one allowance entry. The maximum is six voice calls plus one report generation call per run; reports also use up to two content-screening requests. Failed, cancelled, or rejected work after admission consumes its entry and is not retried.
+
+Optional `REPORT_MODEL` and `REPORT_REASONING` override the configured design model for reports. The output cap is fixed at 1,200 tokens. The server deadline is 12 seconds (up to 2.5 seconds input screening, 7 seconds generation, and 2.5 seconds output screening), with a 15-second client timeout. Requests use `store: false`, no tools, and no SDK retries.
+
+The same in-memory admission gate records report run IDs, attempt IDs, and input fingerprints to reject duplicate runs or changed attempts. This metadata is bounded by the per-instance allowance. Cold starts and separate instances retain the limitations above. Report text and race facts are not persisted or logged by the application. Before a paid writing-quality evaluation, obtain separate authorization; free checks establish integration, not live joke quality.

@@ -15,7 +15,7 @@ export function VoiceLabPanel({profile,geometryMode,mockText,liveUsage,transcrip
   const [recorder]=useState(()=>new MicrophoneRecorder());
   const mic=useSyncExternalStore(recorder.subscribe,recorder.getSnapshot);
   const [mode,setMode]=useState<'create'|'transcribe-only'>('create');
-  const [consent,setConsent]=useState(false),[busy,setBusy]=useState(false);
+  const [busy,setBusy]=useState(false);
   const [events,setEvents]=useState<PipelineEvent[]>([]);
   const [failure,setFailure]=useState<PipelineErrorData>();
   const [status,setStatus]=useState('Enable your microphone, then hold to speak.');
@@ -24,8 +24,7 @@ export function VoiceLabPanel({profile,geometryMode,mockText,liveUsage,transcrip
   const live=profile?.mode==='live';
   const generationTerminal=events.find(event=>event.type==='complete'||event.type==='failed');
   const paidAvailable=Boolean(liveUsage?.enabled&&!liveUsage.busy&&liveUsage.attemptsRemaining>0&&transcription?.available);
-  const canStart=Boolean(profile?.available)&&mic.ready&&(!live||(consent&&paidAvailable));
-  useEffect(()=>{setConsent(false);},[profile?.id,geometryMode,mockText,mode]);
+  const canStart=Boolean(profile?.available)&&mic.ready&&(!live||paidAvailable);
   useEffect(()=>()=>{
     serial.current++;
     const attempt=active.current;active.current=undefined;
@@ -38,7 +37,7 @@ export function VoiceLabPanel({profile,geometryMode,mockText,liveUsage,transcrip
   },[busy]);
   const commit=(attempt:Attempt,outcome:LabAttempt['outcome'],message:string)=>{
     if(active.current!==attempt)return;
-    active.current=undefined;recorder.cancel();setBusy(false);onBusy(false);setConsent(false);setStatus(message);
+    active.current=undefined;recorder.cancel();setBusy(false);onBusy(false);setStatus(message);
     const duration=performance.now()-attempt.started;setElapsed(duration);
     onAttempt({id:attempt.id,prompt:attempt.result?.text??(attempt.profile.mode==='mock'?(attempt.request.mockText??'Simulated speech'):'Recorded speech'),
       geometryMode:attempt.request.geometryMode??'primitives',profile:attempt.profile,outcome,message,elapsedMs:duration,
@@ -99,7 +98,7 @@ export function VoiceLabPanel({profile,geometryMode,mockText,liveUsage,transcrip
     const attempt:Attempt={id:++serial.current,controller:new AbortController(),started:performance.now(),captureMs:0,profile,mode,
       transcriptionModel:live?(transcription?.model??'unavailable'):'mock-transcription',
       request:{profileId:profile.id,geometryMode,...(!live?{mockText}:{}),...(live?{paidAttempt:{id:crypto.randomUUID(),confirmed:true as const}}:{})},events:[],voiceEvents:[],uploading:false};
-    active.current=attempt;setConsent(false);setBusy(true);onBusy(true);setResult(undefined);setEvents([]);setFailure(undefined);setElapsed(0);setCaptureMs(0);setStatus('Preparing microphone…');
+    active.current=attempt;setBusy(true);onBusy(true);setResult(undefined);setEvents([]);setFailure(undefined);setElapsed(0);setCaptureMs(0);setStatus('Preparing microphone…');
     try {
       await recorder.start(()=>{void finish();},error=>commit(attempt,'failed',error.message));
       if(active.current===attempt)setStatus('Recording… release to submit.');
@@ -113,12 +112,11 @@ export function VoiceLabPanel({profile,geometryMode,mockText,liveUsage,transcrip
     {live?<p>Speech model: {transcription?.model??'Unavailable'}</p>:<div className="voice-mode-notice" role="note">
       <strong>Mock mode · speech recognition is off</strong>
       <p>This attempt uses “{mockText}” as its simulated transcript, regardless of what you say. No AI calls.</p>
-      <p>{liveUsage?.enabled?'To recognize your voice, select a live Pipeline profile above and allow the paid voice attempt.':'To recognize your voice, restart with bun run dev:live, select a live Pipeline profile, and allow the paid voice attempt.'}</p>
+      <p>{liveUsage?.enabled?'To recognize your voice, select a live Pipeline profile above.':'To recognize your voice, start bun run dev:live and select a live Pipeline profile.'}</p>
     </div>}
     {live&&<>
       <p>{mode==='create'?'Up to 3 paid API calls: speech, design, geometry.':'One paid speech API call. No generation.'} Failed or cancelled dispatched attempts may incur charges.</p>
       <p>{liveUsage?.attemptsRemaining??0} / {liveUsage?.maxAttempts??3} paid attempts remaining this server start.</p>
-      <label className="voice-consent"><input type="checkbox" checked={consent} disabled={busy||!paidAvailable||!profile?.available} onChange={event=>setConsent(event.target.checked)}/>Allow this paid voice attempt</label>
     </>}
     <RecorderControls recorder={recorder} mode={live?'live':'mock'} disabled={busy?!['recording','preparing'].includes(mic.phase):!canStart} setupDisabled={busy}
       onStart={()=>{void start();}} onFinish={()=>{void finish();}} onCancel={()=>cancelCapture('recording gesture interrupted')}/>

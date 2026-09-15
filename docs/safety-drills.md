@@ -6,7 +6,7 @@ There are seven families: Stampede, Sky Rapids, Pinball, Buddy System, Orbit, In
 
 The displayed drill title describes the selected behavior: for example, **Charge Avoidance**, **Scatter Response**, or **Slipstream Formation**. These all use Stampede's moving-object engine but ask the player to act differently. Rapids titles distinguish current navigation, shortcuts, lane changes, and pulses. The lab also shows the design-stage selection before geometry completes.
 
-Appearance-only requests are valid. The design model infers a supported interaction from traits such as friendliness, nervousness, gliding, or weather equipment. The model chooses a family and its supported options; a more specific title alone does not add a mechanic. Live interpretation should be checked with actual prompts after deliberate paid opt-in.
+Appearance-only requests are valid. The design model infers a supported interaction from traits such as friendliness, nervousness, gliding, or weather equipment. The model chooses a family and its supported options; a more specific title alone does not add a mechanic. Live interpretation should be checked with actual prompts after explicit authorization for a paid test.
 
 ## How a request becomes gameplay
 
@@ -81,7 +81,7 @@ Family tuning lives beside its equations in `pinball-drill.ts`, `buddy-drill.ts`
 - Successful completion includes the validated v4 spec. Failed streams contain the existing structured pipeline error; no automatic repair or retry occurs.
 - V1 and v2 APIs and fixtures remain unchanged. V3 `/api/lab/events` and `/api/voice/events` retain their fixed-preset behavior. `RaceEncounter` is the explicit v3/v4 union used by the shared runtime and replay UI.
 
-Recording remains capped at eight seconds, upload/transcription has its own ten-second budget, and design/geometry share thirty seconds with at most eight seconds for design. Existing content checks, server-only credentials, origin checks, consent, shared busy slot, and per-instance allowance still apply. No additional model call is used for behavior or assessment. See [the pipeline documentation](prompt-to-mesh-pipeline.md), [voice flow](voice-input-plan.md), and [deployment controls](deployment.md).
+Recording remains capped at eight seconds, upload/transcription has its own ten-second budget, and design/geometry share thirty seconds with at most eight seconds for design. Existing content checks, server-only credentials, origin checks, validated attempt metadata, shared busy slot, and per-instance allowance still apply. No additional model call is used for behavior or assessment. See [the pipeline documentation](prompt-to-mesh-pipeline.md), [voice flow](voice-input-plan.md), and [deployment controls](deployment.md).
 
 ## Working on this feature
 
@@ -132,3 +132,7 @@ Keep family-specific state and equations out of the generic collection/voice lif
 6. Run `bun run build`, `bun run typecheck`, and `bun run test`, then inspect the new fixture in the lab and actual race. Test unfamiliar live prompts only with explicit paid-test approval; mocks and intercepted SDK tests cannot establish interpretation quality.
 
 Existing v4 recipes must remain valid. If adding a family to v4, deploy server and client together: an older client will correctly reject an unfamiliar family. Breaking field/meaning changes require an explicit version migration. Keep v1-v3 endpoints and their exercised demo/regression adapters; old does not mean unused.
+
+## Reporting measured results
+
+Incident reporting reads each family's cumulative counters through `race-report-input.ts` and `raceReportMetricKeys` in the shared report contract. New family counters must extend those mappings and their validation/evidence tests together. Report evidence distinguishes delivered from blocked contacts, and sums of racer-seconds from encounter duration. It does not infer harm from bounces, currents, or orbits, or infer relationships not recorded by the runtime. See [incident reports](race-incident-report-proposal.md).

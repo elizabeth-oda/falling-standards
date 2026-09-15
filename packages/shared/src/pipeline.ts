@@ -23,6 +23,7 @@ export const PipelineRequestSchema = GenerationRequestSchema.extend({
   profileId: z.string().min(1).max(48),
   // Omission preserves the existing raw-mesh API behavior; the lab selects primitives.
   geometryMode: GeometryModeSchema.optional(),
+  // Client-generated dispatch metadata; confirmed is retained for API compatibility.
   paidAttempt: z.object({id:z.string().uuid(),confirmed:z.literal(true)}).strict().optional(),
 });
 export type PipelineRequest = z.infer<typeof PipelineRequestSchema>;
@@ -41,7 +42,7 @@ export const PipelineProfileSchema = z.object({
 }).strict();
 export type PipelineProfile = z.infer<typeof PipelineProfileSchema>;
 export const LiveUsageSchema = z.object({
-  enabled:z.boolean(), maxAttempts:z.number().int().min(1).max(100),
+  enabled:z.boolean(), maxAttempts:z.number().int().min(1).max(500),
   attemptsUsed:z.number().int().nonnegative(), attemptsRemaining:z.number().int().nonnegative(), busy:z.boolean(),
 }).strict();
 export type LiveUsage = z.infer<typeof LiveUsageSchema>;

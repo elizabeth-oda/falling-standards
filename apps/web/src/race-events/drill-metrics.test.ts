@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { safetyDrillFixtures } from '@sky/shared';
-import { emptyDrillImpact } from './drill-mechanics';
+import { emptyDrillImpact, increment } from './drill-mechanics';
 import { drillMetricSummary } from './drill-metrics';
 
 test('every family reports measured local and aggregate outcomes, including old metric shapes',()=>{
@@ -16,4 +16,18 @@ test('every family reports measured local and aggregate outcomes, including old 
     const summary=drillMetricSummary(fixture.spec.drill.family,old,'you');
     assert.match(summary,/^0/);assert.doesNotMatch(summary,/undefined|NaN/);
   }
+});
+
+test('racer metric IDs cannot resolve inherited properties or change the counter prototype',()=>{
+  const impact=emptyDrillImpact();
+  for(const id of ['constructor','toString','__proto__']) {
+    assert.equal(drillMetricSummary('pinball',impact,id),'0 bumper bounces');
+    increment(impact.bounces,id);
+    increment(impact.bounces,id,2);
+    assert.equal(drillMetricSummary('pinball',impact,id),'3 bumper bounces');
+    assert.equal(Object.hasOwn(impact.bounces,id),true);
+  }
+  assert.equal(Object.getPrototypeOf(impact.bounces),Object.prototype);
+  assert.equal(drillMetricSummary('pinball',impact),'9 bumper bounces');
+  assert.deepEqual(JSON.parse(JSON.stringify(impact.bounces)),JSON.parse('{"constructor":3,"toString":3,"__proto__":3}'));
 });

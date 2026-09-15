@@ -1,17 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { safetyDrillFixtures } from '@sky/shared';
 import { RaceVoiceSetup, type RaceVoiceController } from '../voice/RaceVoiceControls';
-
-const BRIEFING_SEEN_KEY = 'falling-standards.briefing-seen.v1';
-// Keep returning players' preference across the product rename.
-const LEGACY_BRIEFING_SEEN_KEY = 'mandatory-safety-exercise.briefing-seen.v1';
-function hasSeenBriefing() {
-  try {
-    const current = localStorage.getItem(BRIEFING_SEEN_KEY);
-    return (current ?? localStorage.getItem(LEGACY_BRIEFING_SEEN_KEY)) === 'true';
-  }
-  catch { return false; }
-}
 
 export function RaceBriefing({steeringHelp, actionHelp}: {steeringHelp: string; actionHelp: string}) {
   return <>
@@ -29,45 +18,88 @@ export function RaceBriefing({steeringHelp, actionHelp}: {steeringHelp: string; 
   </>;
 }
 
-export function RaceSetup({voice, steeringHelp, actionHelp, onStart, onSkipVoice, onBack}: {
+export type RaceSetupStep = 'briefing' | 'voice';
+
+export function RaceSetup({voice, step, onStepChange, controls, steeringHelp, actionHelp, reportSettings, onStart, onSkipVoice, onBack}: {
   voice: RaceVoiceController;
+  step: RaceSetupStep;
+  onStepChange: (step: RaceSetupStep) => void;
+  controls: {steering: readonly string[]; boost: string; use: string};
   steeringHelp: string;
   actionHelp: string;
+  reportSettings?: ReactNode;
   onStart: () => boolean;
   onSkipVoice: () => boolean;
   onBack: () => void;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
-  const [briefingOpen, setBriefingOpen] = useState(() => !hasSeenBriefing());
   const readiness = voice.getReadiness();
   const preparedDrill = (safetyDrillFixtures.find(fixture => fixture.prompt === voice.mockText) ?? safetyDrillFixtures[0]).spec;
-  useEffect(() => { heading.current?.focus(); }, []);
-  const begin = (start: () => boolean) => {
-    if (!start()) return;
-    // Store only the briefing preference, never consent, prompts, or audio.
-    try { localStorage.setItem(BRIEFING_SEEN_KEY, 'true'); } catch { /* Storage is optional. */ }
+  useEffect(() => { heading.current?.focus(); }, [step]);
+  const backToBriefing = () => {
+    voice.recorder.cancel();
+    onStepChange('briefing');
   };
-  return <section className="race-setup" aria-labelledby="race-setup-title">
-    <span className="safety-label">PRE-FLIGHT BRIEFING</span>
-    <h1 ref={heading} id="race-setup-title" tabIndex={-1}>Ready for the exercise?</h1>
-    <div className="race-setup-columns">
-      <div>
-        <details open={briefingOpen} onToggle={event => setBriefingOpen(event.currentTarget.open)}>
-          <summary>How to play</summary>
-          <RaceBriefing steeringHelp={steeringHelp} actionHelp={actionHelp}/>
+  return <section className="race-setup" data-step={step} aria-labelledby="race-setup-title">
+    <div className="race-setup-content">
+      <div className="race-setup-heading">
+        <button type="button" onClick={step === 'voice' ? backToBriefing : onBack}>
+          {step === 'voice' ? '← Back to briefing' : '← Change personnel'}
+        </button>
+        <span className="eyebrow">PRE-FLIGHT BRIEFING</span>
+      </div>
+      <h1 ref={heading} id="race-setup-title" tabIndex={-1}>
+        {step === 'briefing' ? 'Ready to race?' : 'Set up hazard reporting'}
+      </h1>
+      {step === 'briefing' ? <>
+        <p className="race-setup-lead">Race three rivals to the finish. Dodge the obstacles.</p>
+        <div className="race-control-cards" aria-label="Essential race controls">
+          <div className="race-control-card">
+            <div className="race-control-keys">{controls.steering.map(key => <kbd key={key}>{key}</kbd>)}</div>
+            <strong>Steer</strong>
+          </div>
+          <div className="race-control-card">
+            <div className="race-control-keys"><kbd>{controls.boost}</kbd></div>
+            <strong>Boost</strong><small>Needs fuel</small>
+          </div>
+          <div className="race-control-card">
+            <div className="race-control-keys"><kbd>{controls.use}</kbd></div>
+            <strong>Use item</strong>
+          </div>
+        </div>
+        <details className="race-setup-all-controls">
+          <summary>All controls</summary><p>{steeringHelp}</p><p>{actionHelp}</p>
         </details>
-        {!briefingOpen && <p>{steeringHelp}<br/>Collect ★ → report a hazard → activate the drill.</p>}
-      </div>
-      <RaceVoiceSetup voice={voice}/>
-    </div>
-    <div className="race-setup-actions">
-      <p role="status">{readiness.message}</p>
-      <div>
-        <button className="begin-exercise" disabled={!readiness.ready} onClick={() => begin(onStart)}>Start with voice</button>
-        <button onClick={() => begin(onSkipVoice)}>Play without voice</button>
-        <button onClick={onBack}>Back to personnel</button>
-      </div>
-      <small>Without voice: <strong>{preparedDrill.displayName}</strong> is prepared ahead in the course. Race, use ordinary items, and fly through its glowing halo to start the shared drill. No microphone, yellow stars, or AI calls.</small>
+        <div className="race-setup-launch-options">
+          <div>
+            <button type="button" className="begin-exercise" onClick={onSkipVoice}>Race without voice →</button>
+            <p>Prepared drill. No microphone or AI calls.</p>
+          </div>
+          <div>
+            <button type="button" onClick={() => onStepChange('voice')}>Set up hazard reporting →</button>
+            <p>Optional · Prepared hazard or Live AI.</p>
+          </div>
+        </div>
+        <p className="race-setup-prepared-note">Prepared drill: <strong>{preparedDrill.displayName}</strong>. Fly through its glowing halo to start the shared drill. No yellow stars.</p>
+      </> : <>
+        <ol className="race-voice-steps" aria-label="How hazard reporting works">
+          <li><strong>Collect a yellow star</strong><span>Two stars. One attempt each.</span></li>
+          <li><strong>Hold Space and speak</strong><span>Up to 10 words · Release to submit · 8 s max</span></li>
+          <li><strong>Fly through the halo</strong><span>The first racer starts the drill for everyone.</span></li>
+        </ol>
+        <RaceVoiceSetup voice={voice}/>
+        {reportSettings}
+        <div className="race-setup-actions">
+          <p id="race-setup-readiness" role="status">{readiness.message}</p>
+          <div>
+            <button type="button" className="begin-exercise" disabled={!readiness.ready}
+              aria-describedby="race-setup-readiness" onClick={onStart}>
+              {voice.live ? 'Start with Live AI →' : 'Start with prepared hazard →'}
+            </button>
+            <button type="button" onClick={onSkipVoice}>Race without voice</button>
+          </div>
+        </div>
+      </>}
     </div>
   </section>;
 }

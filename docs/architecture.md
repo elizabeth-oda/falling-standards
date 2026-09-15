@@ -53,6 +53,8 @@ The generated object and the Voice Power Up are different things. The star grant
 
 Web paths abbreviated as `game/...` or `voice/...` are under `apps/web/src`.
 
+Pre-race setup opens with a short guided briefing: the current steering, boost, and item bindings are shown as large keycaps, with braking and the remaining bindings under **All controls**. Players can start immediately without voice, using the selected prepared drill, or open a separate hazard-reporting step for mode and microphone setup. The entire setup reflows and scrolls as one surface on smaller displays; returning from hazard setup releases the microphone.
+
 `MovementTest` is a historical name for the current main game. `CreationDemoPage`, `DemoGame`, `PlayerController`, and the v2 `RaceCreationHost` remain as older integration/regression code; they are not the page mounted by `GamePage`.
 
 ## Movement, appearance, and effects
@@ -90,11 +92,11 @@ Use the schema for the feature you are changing; do not cast a v3/v4 encounter i
 
 A key belongs in the ignored `apps/server/.env` locally or a Vercel Secret when hosted. Only server code uses it. The browser receives profiles, progress, validated results, and safe errors. Key presence alone does not enable paid calls.
 
-The application allows up to 8 seconds of recording, a separate 10 seconds for upload/transcription, then 30 seconds for generation. Design uses at most 8 seconds of that generation window; geometry gets the time left. A live voice attempt can make up to three API calls under one consent and allowance entry.
+The application allows up to 8 seconds of recording, a separate 10 seconds for upload/transcription, then 30 seconds for generation. Design uses at most 8 seconds of that generation window; geometry gets the time left. A live voice attempt can make up to three API calls under one attempt ID and allowance entry. Clients add validated compatibility metadata automatically on deliberate submission in Live mode; there is no payment opt-in checkbox.
 
 Pause, restart, finish, and navigation cancel pending race requests, discard saved voice grants and waiting results, and reject stale results. A pause preserves an uncollected future star. Audio is kept in memory for the request. Lab comparison history and the race's last-result replay are also in memory; neither stores audio.
 
-Local live mode defaults to three attempts per server start. Hosted mode defaults to 100 per instance. These are temporary counters, not a durable or global spending cap. Read [voice setup](voice-input-plan.md#enable-live-ai-locally) or [deployment](deployment.md) before deliberately enabling paid calls.
+Local live mode defaults to three attempts per server start. Hosted mode defaults to 500 per instance. These are temporary counters, not a durable or global spending cap. Read [voice setup](voice-input-plan.md#enable-live-ai-locally) or [deployment](deployment.md) before deliberately enabling paid calls.
 
 ## Read next
 
@@ -107,3 +109,13 @@ Local live mode defaults to three attempts per server start. Hosted mode default
 ### Race HUD readability
 
 The final race HUD sizing rules live in `apps/web/src/game/race-hud.css`, loaded after the shared game styles. Main readouts use 16–22 px text, position uses 44–64 px, and held-item/boost/dodge controls use larger cards and explicit key badges. HUD edges follow the viewport width, including ultrawide screens. Container queries compact the layout for narrow or short windows. RaceAlertProvider routes screen messages into RaceAlertDock at the bottom: voice progress, drill instructions, generated-effect hit feedback, creation notices, and landing warnings. Ordinary item feedback and lock-on instructions stay directly above the left item card; missile threats remain at the top of the playfield. Wide layouts place the bounded, scrollable dock between item and boost cards; narrow layouts put it in a separate footer below the canvas. Urgent instructions take priority over decorative trophies. World-space target and pickup markers stay attached to their objects. Movement and screen-projected pickup/target positions are unchanged.
+
+## Incident reports
+
+The results viewer shows one incident report per creation: a headline, one or two measured facts, a departmental finding, and expandable inspection details. Authored findings appear immediately and remain provisional while racers are still falling. Prepared drills and development fixtures stay free.
+
+`RaceReportController` owns report state outside the dialog. It freezes the racer-to-character mapping, waits for every racer to finish and voice cleanup to complete, and submits at most one batch containing the run's one or two voice creations. A separate report option in live setup starts off unchecked. It can be revoked in settings before dispatch. Closing the viewer preserves the run's reports; pause, reset, or navigation cancels pending work without a retry.
+
+`packages/shared/src/race-reports.ts` owns strict compact contracts, canonical evidence, authored findings, and the input fingerprint. `race-report-input.ts` extracts only relevant final counters. The server's `race-reports` modules screen names, write one structured batch, validate its evidence references, and screen generated text. Factual sentences come from the application; AI supplies framing only. Schema validation cannot prove the truth of generated framing.
+
+`POST /api/race-reports` and the read-only `GET /api/race-reports/status` are included in the game release. Reports share the creation pipeline's single paid slot and allowance, with one admission per run UUID. The report operation has a 12-second server budget and 15-second client budget. See [incident reports](race-incident-report-proposal.md) for contracts, limits, and verification.

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { meshFixture, type PipelineEvent } from '@sky/shared';
-import { runLabPipeline } from './pipeline-client';
+import { readEventStream, runLabPipeline } from './pipeline-client';
 test('lab client parses progress split across byte chunks and requires a terminal event',async () => {
   const original=globalThis.fetch;
   const terminal={type:'complete',spec:meshFixture,elapsedMs:25,metrics:[]};
@@ -51,3 +51,50 @@ test('lab client retains sanitized provider diagnostics on terminal failures',as
     }
   } finally {globalThis.fetch=original;}
 });
+
+test('lab client validates the complete request before dispatch',async t=>{
+  let calls=0;
+  t.mock.method(globalThis,'fetch',async()=>{calls++;throw new Error('Invalid request reached transport');});
+  for(const request of [
+    {text:'   ',profileId:'mock'},
+    {text:'crystal',profileId:''},
+    {text:'crystal',profileId:'mock',paidAttempt:{id:'invalid',confirmed:true as const}},
+    {text:'crystal',profileId:'mock',code:'unexpected executable field'},
+  ]) {
+    await assert.rejects(runLabPipeline(request,new AbortController().signal,()=>{}),error=>
+      error instanceof Error&&error.name==='ZodError');
+  }
+  assert.equal(calls,0);
+});
+
+test('event streams preserve UTF-8 characters split across chunks',async()=>{
+  const expected='snowman '+String.fromCodePoint(0x2603),bytes=new TextEncoder().encode(JSON.stringify(expected));
+  const response=new Response(new ReadableStream({
+    start(controller){
+      for(const byte of bytes)controller.enqueue(Uint8Array.of(byte));
+      controller.close();
+    },
+  }));
+  const events:unknown[]=[];
+  await readEventStream(response,value=>value,event=>events.push(event),()=>true);
+  assert.deepEqual(events,[expected]);
+  assert.equal(response.body?.locked,false);
+});
+
+for(const [name,bytes,error,closed] of [
+  ['invalid UTF-8',Uint8Array.of(0x22,0xc3,0x28,0x22,0x0a),/encoded data/,false],
+  ['incomplete UTF-8',Uint8Array.of(0x22,0xf0,0x9f),/encoded data/,true],
+  ['oversized response',new Uint8Array(512_001).fill(0x20),/size limit/,false],
+  ['data after completion',new TextEncoder().encode('1\n2\n'),/Unexpected data/,false],
+] as const) {
+  test('event stream rejects '+name+' and releases its reader',async()=>{
+    let cancelled=0;
+    const response=new Response(new ReadableStream({
+      start(controller){controller.enqueue(bytes);if(closed)controller.close();},
+      cancel(){cancelled++;},
+    }));
+    await assert.rejects(readEventStream(response,value=>value,()=>{},()=>true),error);
+    assert.equal(response.body?.locked,false);
+    assert.equal(cancelled,closed?0:1);
+  });
+}

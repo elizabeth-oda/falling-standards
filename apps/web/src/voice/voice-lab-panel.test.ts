@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
-import { proceduralFixtures, type CreationSpec } from '@sky/shared';
+import { proceduralFixtures, type CreationSpec, type VoiceRequest } from '@sky/shared';
 import type { LabAttempt } from '../generation/lab-history';
 
 // Exercise the component's real event wiring with hook, recorder, and request
@@ -37,7 +37,7 @@ function setup(){
   const window=new EventTarget(),document=Object.assign(new EventTarget(),{hidden:false});
   const RecorderControls=()=>null;
   const jsx=(type:unknown,props:Record<string,unknown>)=>({type,props});
-  const attempts:LabAttempt[]=[],completed:CreationSpec[]=[];
+  const attempts:LabAttempt[]=[],completed:CreationSpec[]=[],requests:Array<Omit<VoiceRequest,'captureMs'>>=[];
   const result={text:'A rotten apple with worms.',metric:{model:'mock-transcription',durationMs:1570}};
   let resolveRequest!:(value:{result:typeof result;spec:CreationSpec})=>void;
   const response=new Promise<{result:typeof result;spec:CreationSpec}>(resolve=>{resolveRequest=resolve;});
@@ -48,8 +48,8 @@ function setup(){
     './recorder':{MicrophoneRecorder:Recorder},'./RecorderControls':{RecorderControls},
     './voice-client':{
       VoiceRequestError:class extends Error{},
-      requestVoice:(_audio:unknown,_request:unknown,requestSignal:AbortSignal)=>{
-        requestCount++;signal=requestSignal;return response;
+      requestVoice:(_audio:unknown,request:Omit<VoiceRequest,'captureMs'>,requestSignal:AbortSignal)=>{
+        requests.push(request);requestCount++;signal=requestSignal;return response;
       },
     },
   };
@@ -69,9 +69,8 @@ function setup(){
     const element=node as Element;
     return predicate(element)?element:find(element.props?.children,predicate);
   }
-  const consent=find(render(),element=>element.props?.type==='checkbox')!;
+  assert.equal(find(render(),element=>element.props?.type==='checkbox'),undefined);
   const cleanups=effects.map(effect=>effect());mounted=true;
-  (consent.props.onChange as (event:unknown)=>void)({target:{checked:true}});
   const controls=()=>find(render(),element=>element.type===RecorderControls)!;
   const interrupt=(kind:string)=>{
     if(kind==='blur')window.dispatchEvent(new Event('blur'));
@@ -79,7 +78,7 @@ function setup(){
     else (controls().props.onCancel as ()=>void)();
   };
   return {
-    attempts,completed,interrupt,signal:()=>signal,requestCount:()=>requestCount,recorderCancels:()=>recorderCancels,
+    attempts,completed,requests,interrupt,signal:()=>signal,requestCount:()=>requestCount,recorderCancels:()=>recorderCancels,
     async start(){(controls().props.onStart as ()=>void)();await flush();},
     async submit(){(controls().props.onFinish as ()=>void)();await flush();},
     async complete(){resolveRequest({result,spec:proceduralFixtures[0].spec});await flush();},
@@ -116,4 +115,19 @@ test('leaving the voice page aborts submitted work and ignores late completion',
   const ui=setup();await ui.start();await ui.submit();ui.unmount();
   assert.equal(ui.signal()?.aborted,true);assert.match(ui.signal()?.reason.message,/page closed/);
   await ui.complete();assert.equal(ui.completed.length,0);assert.equal(ui.attempts.length,0);
+});
+
+test('live voice needs no checkbox and adds fresh paid metadata only on deliberate submissions',async()=>{
+  const ui=setup();
+  assert.equal(ui.requestCount(),0);
+  await ui.start();assert.equal(ui.requestCount(),0);
+  await ui.submit();await ui.submit();
+  assert.equal(ui.requestCount(),1);
+  assert.equal(ui.requests[0].paidAttempt?.confirmed,true);
+  assert.match(ui.requests[0].paidAttempt?.id??'',/^[0-9a-f-]{36}$/);
+  await ui.complete();
+  await ui.start();await ui.submit();
+  assert.equal(ui.requestCount(),2);
+  assert.notEqual(ui.requests[0].paidAttempt?.id,ui.requests[1].paidAttempt?.id);
+  ui.unmount();
 });

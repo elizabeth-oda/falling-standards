@@ -8,7 +8,7 @@ export interface CreationHost {
   spawnCreation(instanceId:string,spec:CreationSpec):void;
   applyEffects(effects:PowerUpEffect[]):void;
 }
-/** Legacy demo/v2 adapter; the main race uses a separately validated v3 adapter. */
+/** Legacy v2 demo adapter. */
 export class CreationLoop extends CreationAttempt<CreationSpec> {
   constructor(client:CreationClient,voice:PromptCapture,host:CreationHost,audioClient?:AudioCreationClient) {
     super(client,voice,{

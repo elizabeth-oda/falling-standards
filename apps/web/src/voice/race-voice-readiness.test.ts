@@ -23,20 +23,20 @@ const profiles = PipelineProfilesSchema.parse({
   liveUsage:{enabled:true,busy:false,maxAttempts:3,attemptsUsed:0,attemptsRemaining:3},
   deadlineMs:30000,designBudgetMs:8000,
 });
-const ready = {enabled:true,microphone:{ready:true,phase:'ready' as const},profiles,profileId:'fake-live',armed:true,error:''};
+const ready = {enabled:true,microphone:{ready:true,phase:'ready' as const},profiles,profileId:'fake-live',error:''};
 
-test('mock needs microphone readiness but never paid consent or live availability', () => {
-  const mock = {...ready,profileId:'mock',armed:false,profiles:{...profiles,liveUsage:{...profiles.liveUsage,enabled:false}}};
+test('mock needs microphone readiness but never live availability', () => {
+  const mock = {...ready,profileId:'mock',profiles:{...profiles,liveUsage:{...profiles.liveUsage,enabled:false}}};
   assert.equal(raceVoiceReadiness(mock).ready,true);
   for (const microphone of [{ready:false,phase:'idle'}, {ready:true,phase:'preparing'}, {ready:true,phase:'error'}] as const) {
     assert.equal(raceVoiceReadiness({...mock,microphone}).ready,false);
   }
 });
 
-test('live readiness requires fresh consent, a usable profile, transcription, and capacity', () => {
+test('live readiness needs a usable profile, microphone, transcription and capacity without a separate opt-in', () => {
   assert.equal(raceVoiceReadiness(ready).ready,true);
   for (const change of [
-    {enabled:false}, {armed:false}, {profiles:undefined}, {profileId:'missing'}, {error:'Connection failed'},
+    {enabled:false}, {profiles:undefined}, {profileId:'missing'}, {error:'Connection failed'},
     {profiles:{...profiles,profiles:profiles.profiles.map(profile=>({...profile,available:false}))}},
     {profiles:{...profiles,transcription:undefined}},
     ...[{enabled:false},{busy:true},{attemptsRemaining:0}].map(change=>({profiles:{...profiles,liveUsage:{...profiles.liveUsage,...change}}})),
@@ -98,47 +98,50 @@ async function setup(profileAvailability: typeof profiles | null = profiles) {
   return {race,render,requests,captures:()=>captures,cancellations:()=>cancellations,close:()=>cleanups.forEach(cleanup=>cleanup?.())};
 }
 
-test('permission checking dispatches nothing; two-attempt consent survives starting and clears on reset', async () => {
+test('selecting live and checking permission dispatch nothing; an explicit recording uses a fresh attempt ID', async () => {
   const ui=await setup();
   let voice=ui.render();voice.reset();voice=ui.render();
   voice.setProfileId('fake-live');await voice.recorder.prepare();voice=ui.render();
-  assert.equal(voice.getReadiness().ready,false);
+  assert.equal(voice.getReadiness().ready,true);
+  assert.equal(voice.paidAttemptsRemaining,RACE_VOICE_ATTEMPTS);
   assert.equal(ui.requests.length,0);assert.equal(ui.captures(),0);
-  voice.setArmed(true);voice=ui.render();
   const session=voice.state.session;
-  // The prepared countdown starts the existing host without resetting it.
   voice.host.start();voice=ui.render();
-  assert.equal(voice.state.session,session);assert.equal(voice.armed,true);
+  assert.equal(voice.state.session,session);
+  assert.equal(ui.requests.length,0);assert.equal(ui.captures(),0);
   voice.host.loop.collectVoice();voice=ui.render();voice.start();await flush();
-  voice=ui.render();assert.equal(voice.armed,true);assert.equal(voice.paidAttemptsRemaining,1);
+  voice=ui.render();assert.equal(voice.paidAttemptsRemaining,1);
   await voice.host.loop.finishRecording();
   assert.equal(ui.captures(),1);assert.equal(ui.requests.length,1);
   assert.equal(ui.requests[0].profileId,'fake-live');assert.equal(ui.requests[0].paidAttempt?.confirmed,true);
   voice.start();assert.equal(ui.captures(),1);
   ui.race.reset();voice.reset();voice=ui.render();
-  assert.equal(voice.armed,false);assert.equal(voice.enabled,true);
-  voice.host.start();voice.host.loop.collectVoice();voice=ui.render();voice.start();
+  assert.equal(voice.paidAttemptsRemaining,RACE_VOICE_ATTEMPTS);assert.equal(voice.enabled,true);
   assert.equal(ui.captures(),1);assert.equal(ui.requests.length,1);
+  voice.host.start();voice.host.loop.collectVoice();voice=ui.render();voice.start();await flush();
+  await voice.host.loop.finishRecording();
+  assert.equal(ui.requests.length,2);
+  assert.notEqual(ui.requests[0].paidAttempt?.id,ui.requests[1].paidAttempt?.id);
   ui.close();
 });
 
-test('profile and prepared-prompt changes clear consent', async () => {
+test('profile and prepared-prompt changes never capture or dispatch by themselves', async () => {
   const ui=await setup();let voice=ui.render();
-  voice.setArmed(true);voice=ui.render();voice.setProfileId('fake-live');
-  voice=ui.render();assert.equal(voice.armed,false);
-  voice.setArmed(true);voice=ui.render();voice.setMockText(safetyDrillFixtures[1].prompt);
-  assert.equal(ui.render().armed,false);assert.equal(ui.requests.length,0);ui.close();
+  voice.setProfileId('fake-live');voice=ui.render();
+  voice.setMockText(safetyDrillFixtures[1].prompt);voice=ui.render();
+  assert.equal(voice.paidAttemptsRemaining,RACE_VOICE_ATTEMPTS);
+  assert.equal(ui.requests.length,0);assert.equal(ui.captures(),0);ui.close();
 });
 
-for(const availability of ['live armed','unavailable'] as const)test('playing without voice loads the selected drill with '+availability+' profiles and never captures', async () => {
+for(const availability of ['live selected','unavailable'] as const)test('playing without voice loads the selected drill with '+availability+' profiles and never captures', async () => {
   const ui=await setup(availability==='unavailable'?null:profiles);let voice=ui.render();
   const selected=safetyDrillFixtures.find(fixture=>fixture.spec.drill.family==='rapids')!;
-  voice.setProfileId('fake-live');voice.setMockText(selected.prompt);voice.setArmed(true);
-  if(availability==='live armed')await voice.recorder.prepare();
+  voice.setProfileId('fake-live');voice.setMockText(selected.prompt);
+  if(availability==='live selected')await voice.recorder.prepare();
   voice=ui.render();
   const cancellations=ui.cancellations();
   voice.skipForRun();voice=ui.render();
-  assert.equal(voice.enabled,false);assert.equal(voice.armed,false);assert.equal(voice.host.voice,undefined);
+  assert.equal(voice.enabled,false);assert.equal(voice.host.voice,undefined);
   assert.equal(voice.paidAttemptsRemaining,0);assert.ok(ui.cancellations()>cancellations,'prepared microphone input is released');
   assert.deepEqual(voice.host.creation?.spec,selected.spec);
   assert.equal(voice.host.creations.length,1);assert.equal(voice.host.creations[0].source,'prepared');
@@ -154,7 +157,7 @@ for(const availability of ['live armed','unavailable'] as const)test('playing wi
   assert.ok(voice.host.creations[0].snapshot?.triggererId,'the prepared encounter can activate in a real race');
   assert.equal(voice.host.loop.getSnapshot().phase,'ended');assert.equal(voice.host.voice,undefined);
   ui.race.reset();voice.reset();voice=ui.render();
-  assert.equal(voice.enabled,true);assert.ok(voice.host.voice);assert.equal(voice.armed,false);
+  assert.equal(voice.enabled,true);assert.ok(voice.host.voice);assert.equal(voice.paidAttemptsRemaining,RACE_VOICE_ATTEMPTS);
   assert.equal(voice.host.creation,undefined);assert.equal(voice.host.creations.length,0);
   ui.close();
 });
@@ -278,20 +281,24 @@ test('consumption, a missed star, and reset clear the previous second-star arriv
   }
 });
 
-test('one run consent admits only two separately identified requests, never duplicates on key repeat', async () => {
+test('one live run permits two separately identified requests without opt-in or key-repeat duplicates', async () => {
   const ui=await setup();let voice=ui.render();
   voice.setProfileId('fake-live');await voice.recorder.prepare();voice=ui.render();
-  voice.setArmed(true);voice=ui.render();voice.host.start();
+  voice.host.start();
   voice.host.loop.collectVoice();voice=ui.render();voice.start();voice.start();await flush();
   await voice.host.loop.finishRecording();
   assert.equal(ui.requests.length,1);
-  // The race host rearms only the attempt; this isolates consent from event scheduling.
+  // The race host rearms only the attempt; this isolates the defensive attempt cap from event scheduling.
   voice.host.loop.reset();voice.host.loop.start();voice.host.loop.collectVoice();
   voice=ui.render();voice.start();voice.start();await flush();await voice.host.loop.finishRecording();
-  voice=ui.render();assert.equal(voice.paidAttemptsRemaining,0);assert.equal(voice.armed,false);
+  voice=ui.render();assert.equal(voice.paidAttemptsRemaining,0);
   assert.equal(ui.requests.length,2);assert.equal(ui.captures(),2);
   assert.notEqual(ui.requests[0].paidAttempt?.id,ui.requests[1].paidAttempt?.id);
   assert.ok(ui.requests.every(request=>request.paidAttempt?.confirmed));
+  // Configuration changes do not replenish this run's used paid attempts.
+  voice.setProfileId('mock');voice=ui.render();voice.setProfileId('fake-live');
+  voice=ui.render();voice.setMockText(safetyDrillFixtures[1].prompt);voice=ui.render();
+  assert.equal(voice.paidAttemptsRemaining,0);
   voice.host.loop.reset();voice.host.loop.start();voice.host.loop.collectVoice();
   voice=ui.render();voice.start();await flush();
   assert.equal(ui.requests.length,2);assert.equal(ui.captures(),2);ui.close();
