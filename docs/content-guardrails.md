@@ -50,3 +50,9 @@ Automated tests use neutral placeholders and mocked moderation flags. They verif
 The current release screens intent and design text, not rendered geometry. A safe brief may still produce an inappropriate shape; triangle/recipe bounds cannot recognize its meaning. A follow-up should render the exact validated mesh from several angles on the server and screen those views before completion, including targeted symbol/gesture checks beyond generic image moderation. That work needs its own rendering, latency and classifier evaluation; it must fit the same attempt/lifecycle limits. No content filter guarantees perfect detection.
 
 Reference: [OpenAI moderation guide](https://developers.openai.com/api/docs/guides/moderation). The endpoint supports text and image input and is free; supported categories differ by input modality.
+
+## Incident report text
+
+The separate event-report endpoint reuses the same live content guard and admission gate. It screens the creation display name before its one generation call, then screens headline and finding individually before returning them. Both guard requests fit inside the report's 12-second total deadline, with at most 2.5 seconds per screening. Refusal or screening failure retains the client's authored report, consumes an admitted attempt, and never triggers a repair call.
+
+The server derives bounded factual evidence from a strict event-summary schema. The model selects evidence IDs and writes comic framing; the client renders canonical facts and escaped generated text. Neither original prompts nor transcripts/audio enter reporting. Structural checks and valid references do not prove that every implication of a joke is factual; a separately authorized live writing evaluation remains necessary. No report inputs, outputs, or rejected content are added to logs or persistent history. See [incident reports](race-incident-report-proposal.md).

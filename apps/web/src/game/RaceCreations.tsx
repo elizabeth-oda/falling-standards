@@ -5,16 +5,18 @@ import { createPortal } from 'react-dom';
 import { PerspectiveCamera, type Group } from 'three';
 import { PowerUpModel } from '../components/PowerUpModel';
 import { fitModelToDiameter } from '../race-events/model-presentation';
-import { drillAssessment } from './drill-feedback';
-import { drillMetricSummary } from '../race-events/drill-metrics';
 import type { RaceCreationRecord } from './race-creation-history';
+import type { RaceIncidentReportView } from './race-report-controller';
+import { RaceCreationOutcome, type CreationRacerName } from './RaceCreationOutcome';
 import './race-creations.css';
 
-type RacerName = {id: string | number; name: string};
-type Props = {creations: readonly RaceCreationRecord[]; racers: readonly RacerName[]};
+type Props = {
+  creations: readonly RaceCreationRecord[];
+  racers: readonly CreationRacerName[];
+  reports?: Readonly<Record<string, RaceIncidentReportView>>;
+};
 type View = {rotation: number; tilt: number; zoom: number};
 const initialView: View = {rotation: -25, tilt: 10, zoom: 100};
-const total = (counts: Record<string, number> = {}) => Object.values(counts).reduce((sum, value) => sum + value, 0);
 const wrapAngle = (angle: number) => ((angle + 180) % 360 + 360) % 360 - 180;
 const creationsTitle = (creations: readonly RaceCreationRecord[]) => creations.length > 0 && creations.every(creation => creation.source === 'prepared') ? 'Prepared drill' : 'Your creations';
 
@@ -46,63 +48,7 @@ function CreationModel({spec, view}: {spec: RaceEncounter; view: View}) {
   </>;
 }
 
-function CreationOutcome({creation, racers}: {creation: RaceCreationRecord; racers: readonly RacerName[]}) {
-  const {snapshot, spec} = creation;
-  const impact = snapshot?.impact;
-  const racerName = (id: string) => racers.find(racer => String(racer.id) === id)?.name ?? 'A racer';
-  const triggererId = snapshot?.triggererId;
-  const triggered = triggererId !== undefined;
-  const assessment = drillAssessment(snapshot);
-  let status: string;
-  if (triggered) {
-    status = snapshot?.phase === 'active' ? 'Still active for the remaining racers.' : 'The effect finished.';
-  } else if (creation.status === 'ready') {
-    status = 'Created and waiting for the shared course space. It has not entered the race yet.';
-  } else if (creation.status === 'discarded') {
-    status = 'Created, but not placed before the attempt ended. It did not affect the race.';
-  } else if (creation.status === 'collectible') {
-    status = 'Waiting for a racer to collect it. It has not affected the race yet.';
-  } else if (snapshot?.expirationReason === 'passed') {
-    status = 'Every racer passed it without collecting it. It did not activate.';
-  } else if (snapshot?.expirationReason === 'lifetime') {
-    status = 'The pickup expired before anyone collected it. It did not activate.';
-  } else {
-    status = 'No activation was recorded. It did not affect the race.';
-  }
-  const metrics: {label: string; value: string | number}[] = [];
-  if (triggered && impact) {
-    if (spec.version === 4 && impact.drill) {
-      metrics.push({label: 'Drill results', value: drillMetricSummary(spec.drill.family, impact.drill)});
-      if (spec.drill.family === 'stampede' && spec.drill.reaction !== 'steady') {
-        metrics.push({label: 'Herd reactions', value: impact.drill.reactions});
-      }
-    } else if (spec.version === 3) {
-      if (spec.effect.type === 'repulsionBurst') metrics.push({label: 'Pushes delivered', value: total(impact.impulseCounts)});
-      if (spec.effect.type === 'debrisShower') {
-        metrics.push({label: 'Debris hits', value: total(impact.debrisHits)});
-        metrics.push({label: 'Debris hits blocked', value: total(impact.blockedDebrisHits)});
-      }
-      if (spec.effect.type === 'protectiveZone') metrics.push({label: 'Obstacle hits blocked', value: total(impact.obstacleBlocks)});
-    }
-  }
-  return <section className="race-creation-outcome" aria-label="What happened in the race">
-    <h4>What happened in the race</h4>
-    <p>{status}</p>
-    {triggererId !== undefined && <>
-      <p><b>Activated by {racerName(triggererId)}.</b>{' '}
-        {impact?.affectedRacerIds.length
-          ? 'Affected ' + impact.affectedRacerIds.map(racerName).join(', ') + '.'
-          : 'No racer effects recorded.'}</p>
-      {metrics.length > 0 && <dl className="race-creation-metrics">{metrics.map(metric => <div key={metric.label}>
-        <dt>{metric.label}</dt><dd>{metric.value}</dd>
-      </div>)}</dl>}
-      {metrics.length > 0 && <small>Totals across all racers.</small>}
-      {assessment && <p className="race-creation-assessment"><b>Your inspection</b>{assessment}</p>}
-    </>}
-  </section>;
-}
-
-function CreationDialog({creations, racers, onClose}: Props & {onClose: () => void}) {
+function CreationDialog({creations, racers, reports, onClose}: Props & {onClose: () => void}) {
   const modal = useRef<HTMLDialogElement>(null);
   const previouslyFocused = useRef(document.activeElement);
   const titleId = useId(), helpId = useId();
@@ -166,7 +112,7 @@ function CreationDialog({creations, racers, onClose}: Props & {onClose: () => vo
           <span className="race-creation-file-label">{creation.source === 'prepared' ? 'PREPARED SAFETY DRILL' : creation.source === 'fixture' ? 'PRACTICE FIXTURE' : 'CREATION ' + (creation.attemptNumber ?? selected + 1)}</span>
           <h3>{creation.spec.displayName}</h3>
           <section className="race-creation-effect" aria-label="Creation effect"><h4>{encounterLabel(creation.spec)}</h4><p>{encounterInstruction(creation.spec)}</p></section>
-          <CreationOutcome creation={creation} racers={racers}/>
+          <RaceCreationOutcome key={creation.instanceId} creation={creation} racers={racers} report={reports?.[creation.instanceId]}/>
         </div>
       </div>
     </div> : <div className="race-creations-empty">
@@ -178,13 +124,13 @@ function CreationDialog({creations, racers, onClose}: Props & {onClose: () => vo
 }
 
 /** In-memory results only. Opening the viewer never records audio or runs generation. */
-export function RaceCreations({creations, racers}: Props) {
+export function RaceCreations({creations, racers, reports}: Props) {
   const [open, setOpen] = useState(false);
   return <>
     <button type="button" className="race-creations-open" aria-haspopup="dialog" onClick={() => setOpen(true)}>
       {creationsTitle(creations)}{creations.length > 0 && ' (' + creations.length + ')'}
     </button>
-    {open && <CreationDialog creations={creations} racers={racers} onClose={() => setOpen(false)}/>}
+    {open && <CreationDialog creations={creations} racers={racers} reports={reports} onClose={() => setOpen(false)}/>}
   </>;
 }
 

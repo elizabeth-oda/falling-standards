@@ -208,3 +208,23 @@ test('the final landing tick retains activation before clearing the runtime', ()
   assert.equal(game.host.creations.length, 0);
   game.host.dispose();
 });
+
+test('an in-flight paid report holds the second grant without spending its speaking window', async () => {
+  const game=setup();
+  await game.generate(drill);game.trigger();game.step(10.1);
+  let reporting=true;
+  game.host.paidReportPending=()=>reporting;
+  game.revealSecondStar();
+  const [x,y,z]=game.host.voice!.position;
+  game.host.step(dt,[x,y+4,z],[x,y-4,z]);
+  assert.equal(game.host.getSnapshot().secondStar,'collected');
+  assert.equal(game.host.attemptNumber,1);
+  game.step(11);
+  assert.equal(game.host.getSnapshot().secondStar,'collected');
+  assert.notEqual(game.host.loop.getSnapshot().phase,'prompted');
+  reporting=false;game.step();
+  assert.equal(game.host.attemptNumber,2);
+  assert.equal(game.host.loop.getSnapshot().phase,'prompted');
+  assert.equal(game.host.loop.getSnapshot().phaseSeconds,0);
+  game.host.dispose();
+});

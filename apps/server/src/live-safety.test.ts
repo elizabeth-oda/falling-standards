@@ -150,3 +150,35 @@ test('500-attempt allowance and duplicate IDs belong to one in-memory instance',
   anotherInstance.acquire(first)();
   assert.equal(anotherInstance.status.attemptsRemaining,499);
 });
+
+test('report admission shares the allowance, deduplicates each event, and caps reports per run', () => {
+  const gate=new LiveAttempts({enabled:true,maxAttempts:4});
+  const runId=randomUUID(), first={runId,creationId:'first'};
+  const attempt=request();
+  const release=gate.acquire(attempt,first);
+  assert.equal(gate.status.busy,true);
+  assert.throws(()=>gate.acquire(request(),first),code('DUPLICATE_ATTEMPT'));
+  assert.throws(()=>gate.acquire(request(),{runId,creationId:'second'}),code('LIVE_BUSY'));
+  release();
+  const changed={...attempt,text:'changed payload'};
+  assert.throws(()=>gate.acquire(changed,first),code('DUPLICATE_ATTEMPT'));
+  assert.throws(()=>gate.acquire(request(),first),code('DUPLICATE_ATTEMPT'));
+  gate.acquire(request(),{runId,creationId:'second'})();
+  assert.throws(()=>gate.acquire(request(),{runId,creationId:'third'}),code('LIVE_LIMIT_REACHED'));
+  gate.acquire(request())();
+  gate.acquire(request(),{runId:randomUUID(),creationId:'first'})();
+  assert.equal(gate.status.attemptsRemaining,0);
+  assert.throws(()=>gate.acquire(request(),{runId:randomUUID(),creationId:'first'}),code('LIVE_LIMIT_REACHED'));
+  assert.equal(gate.status.busy,false);
+});
+
+test('an injected admission instance is the pipeline gate without another allowance', async () => {
+  const gate=new LiveAttempts({enabled:true,maxAttempts:1});
+  const pipeline=new CreationPipeline(pipelineProfiles({OPENAI_API_KEY:secret},true),
+    {mock:{run:responseFor},live:{run:responseFor}},undefined,undefined,undefined,
+    {mock:mockContentGuard,live:mockContentGuard},gate);
+  assert.equal(pipeline.admissionGate,gate);
+  gate.acquire(request(),{runId:randomUUID(),creationId:'report-event'})();
+  await assert.rejects(pipeline.run(request()),code('LIVE_LIMIT_REACHED'));
+  assert.equal(pipeline.liveUsage.attemptsUsed,1);
+});

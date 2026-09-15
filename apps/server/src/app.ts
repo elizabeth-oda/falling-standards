@@ -5,10 +5,16 @@ import type { CreationPipeline } from './generation/pipeline.js';
 import { registerCreationRoutes } from './generation/routes.js';
 import type { CreationProvider } from './generation/provider.js';
 import Fastify from 'fastify';
+import { buildRaceReports } from './race-reports/bootstrap.js';
+import { registerRaceReportRoutes } from './race-reports/routes.js';
+import type { RaceReportService } from './race-reports/service.js';
 import { fixtures, GenerationRequestSchema, PowerUpSpecSchema } from '@sky/shared';
-export function buildApp(options: {liveEnabled?:boolean; allowedOrigin?:(origin:string|undefined)=>boolean; creationProvider?: CreationProvider; creationTimeoutMs?: number; pipeline?: CreationPipeline} = {}) {
+export function buildApp(options: {liveEnabled?:boolean; allowedOrigin?:(origin:string|undefined)=>boolean; creationProvider?: CreationProvider; creationTimeoutMs?: number; pipeline?: CreationPipeline; reports?:RaceReportService} = {}) {
   const app=Fastify({logger:{redact:['req.headers.authorization','req.headers.cookie']},bodyLimit:4096});
   const pipeline = options.pipeline ?? buildPipeline(process.env,options.liveEnabled ?? false);
+  const reports = options.reports ?? buildRaceReports(process.env,pipeline);
+  if(reports.admissionGate!==pipeline.admissionGate)throw new Error('Creation and report services must share the same live admission gate.');
+  registerRaceReportRoutes(app,reports,options.allowedOrigin);
   registerLabRoutes(app, pipeline,options.allowedOrigin);
   registerVoiceRoutes(app, pipeline,options.allowedOrigin);
   registerCreationRoutes(app, options.creationProvider ?? {

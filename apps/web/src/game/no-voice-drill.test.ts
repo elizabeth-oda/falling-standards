@@ -34,7 +34,7 @@ function setup(course=false,seed=0.42) {
 test('a prepared no-voice drill uses normal placement, activates once, and changes real movement within its bounds',()=>{
   const game=setup(),player=game.race.racers[0];
   const before=game.race.snapshot(player);
-  player.item='cloak';player.boostFuel=2;
+  player.item='bubbleWrap';player.boostFuel=2;
   game.host.loadPreparedDrill(prepared);
   const spawned=game.runtime.getSnapshot();
   assert.equal(spawned.phase,'collectible');
@@ -62,7 +62,7 @@ test('a prepared no-voice drill uses normal placement, activates once, and chang
   const result=game.host.creations[0];
   assert.equal(result.status,'expired');assert.equal(result.snapshot?.triggererId,'0');
   assert.ok(result.snapshot!.impact!.drill!.currentSeconds['0']>0);
-  assert.equal(player.item,'cloak');assert.equal(player.boostFuel,2,'the drill must not replace ordinary inventory or fuel');
+  assert.equal(player.item,'bubbleWrap');assert.equal(player.boostFuel,2,'the drill must not replace ordinary inventory or fuel');
   assert.equal(result.snapshot?.drill,undefined);assert.deepEqual(result.snapshot?.debris,[]);
   // Continue beyond the second voice-star window: this is exactly one prepared encounter.
   for(let tick=0;tick<20000&&-game.race.snapshot(player).position[1]<FINISH_DEPTH*0.71;tick++)game.step();

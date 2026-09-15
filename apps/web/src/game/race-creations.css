@@ -48,3 +48,27 @@
 @media(max-width:680px){.race-creations-dialog{width:calc(100vw - 20px);max-height:calc(100dvh - 20px)}.race-creations-heading{padding:15px;gap:12px}.race-creations-heading>div>span{font-size:8px;letter-spacing:.6px}.race-creations-heading h2{font-size:23px}.race-creations-heading button{font-size:11px;padding:9px;gap:8px}.race-creations-content{padding:16px}.race-creation-layout{grid-template-columns:1fr;gap:25px}.race-creation-model{height:260px}.race-creation-selector button{font-size:12px;padding:10px}.race-creation-file h3{font-size:24px}.race-creations-footer{padding:14px 16px}}
 @media(max-height:650px) and (min-width:681px){.race-creation-model{height:240px}.race-creations-heading{padding:12px 22px}.race-creations-content{padding-top:14px}.race-creation-selector{margin-bottom:14px}.race-creations-heading h2{font-size:25px}}
 
+
+.race-incident-label{display:block;font:9px var(--font-mono);letter-spacing:1.4px;color:#d9c467;margin-bottom:9px}
+.race-creation-file .race-incident-headline{font-size:21px;line-height:1.2;letter-spacing:-.25px;color:#fff4c1;margin-bottom:14px}
+.race-creations-dialog .race-incident-status{font:10px/1.5 var(--font-mono);color:#dbcb87;margin:-3px 0 13px}
+.race-incident-facts p:last-child{margin-bottom:0}
+.race-incident-finding{margin:18px 0 12px;padding:14px 16px;border-left:3px solid #f0c928;background:#ececda;color:#243b46}
+.race-incident-finding>b{display:block;font:10px var(--font-mono);letter-spacing:.25px;margin-bottom:7px}
+.race-creations-dialog .race-incident-finding p{color:#243b46;font-size:14px;line-height:1.55;margin:0}
+.race-incident-finding>small{display:block;margin-top:9px;font:9px var(--font-mono);color:#516269}
+.race-creations-dialog .race-incident-request-status p{font-size:11px;line-height:1.5;color:#c4cdbf}
+.race-incident-details{margin-top:18px;padding-top:13px;border-top:1px solid #5b707a}
+.race-incident-details summary{cursor:pointer;color:#d6d9c5;font-size:12px;line-height:1.5}
+.race-incident-details summary:focus-visible{outline:3px solid #f0c928;outline-offset:5px}
+.race-incident-details[open] summary{margin-bottom:15px}
+.race-incident-details>small{display:block;font-size:10px;line-height:1.5;color:#b4c7cc}
+.race-incident-details .race-creation-metrics{grid-template-columns:1fr}
+.race-incident-details .race-creation-metrics dd{font-size:13px;line-height:1.6}
+.race-incident-racers{display:grid;gap:10px;margin:16px 0}
+.race-incident-racers>div{display:grid;grid-template-columns:65px minmax(0,1fr);gap:10px;border-bottom:1px solid #445b65;padding-bottom:9px}
+.race-incident-racers dt{font-size:11px;color:#eef0e4}
+.race-incident-racers dd{margin:0;font-size:11px;line-height:1.6;color:#c4d4d7}
+.race-incident-details .race-creation-assessment b{display:block;margin-bottom:5px}
+.race-report-settings{border-top:1px solid #627785;padding-top:12px;margin:12px 0}
+.race-report-settings>small{display:block;line-height:1.5;margin-top:6px}

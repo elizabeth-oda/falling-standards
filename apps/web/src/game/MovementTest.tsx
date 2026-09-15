@@ -1,6 +1,9 @@
 import { RaceAlert, RaceAlertDock, RaceAlertProvider } from './RaceAlerts';
 import { LaunchScreen } from '../launch/LaunchScreen';
 import { RaceCreations } from './RaceCreations';
+import { RaceReportController } from './race-report-controller';
+import { loadRaceReportStatus } from './race-report-client';
+import type { RaceReportStatus } from '@sky/shared';
 import { MusicControls, useGameMusic } from './GameMusic';
 import { Preview } from '../pages/CharacterPage';
 import { CHARACTERS, DEFAULT_CHARACTER_ANGLE } from './characters';
@@ -11,7 +14,7 @@ import { RACE_CREATION_PICKUP_RADIUS } from './race-event-config';
 import { RaceEventReport } from './RaceEventReport';
 import { RaceCreationHud } from './RaceCreationVisuals';
 import { RaceMicrophoneSetup, RaceVoiceControls, useRaceVoice } from '../voice/RaceVoiceControls';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { PracticeRace } from './practice-race';
 import { ITEM_NAMES } from './race-course';
@@ -46,6 +49,25 @@ export function MovementTest() {
   const [pose,setPose]=useState<GregPose>('Stand'),[previewPaused,setPreviewPaused]=useState(false),[take,setTake]=useState(0);
   const [race]=useState(()=>new PracticeRace(true,Math.random,new RaceEventRuntime({pickupContactRadius:RACE_CREATION_PICKUP_RADIUS})));
   const voice=useRaceVoice(race);
+  const [reportController]=useState(()=>new RaceReportController());
+  const incidentReports=useSyncExternalStore(reportController.subscribe,reportController.getSnapshot);
+  const [reportConsent,setReportConsent]=useState(false);
+  const [reportStatus,setReportStatus]=useState<RaceReportStatus>();
+  useEffect(()=>{
+    const controller=new AbortController();
+    void loadRaceReportStatus(controller.signal).then(status=>{
+      if(!controller.signal.aborted)setReportStatus(status);
+    }).catch(()=>{if(!controller.signal.aborted)setReportStatus(undefined);});
+    return()=>controller.abort();
+  },[voice.profiles]);
+  useEffect(()=>{setReportConsent(false);},[voice.profileId]);
+  useEffect(()=>{
+    voice.host.paidReportPending=()=>reportController.liveRequestPending;
+    return()=>{voice.host.paidReportPending=undefined;reportController.dispose();};
+  },[voice.host,reportController]);
+  const reportSettings={reportConsent,onReportConsentChange:setReportConsent,reportLive:!!voice.live,
+    reportAvailable:!!reportStatus?.available&&(reportStatus.liveUsage.attemptsRemaining>0)};
+
   const microphone=voice.microphone;
   const readiness=voice.getReadiness();
   const voiceBlockedReason=readiness.ready?'':readiness.message;
@@ -69,24 +91,27 @@ export function MovementTest() {
   const [notice, setNotice] = useState('');
   const pause = useCallback((value: boolean) => {
     runtime.paused = value;
-    if (value) runtime.voice?.pause(); else runtime.voice?.start();
+    if (value) {reportController.pause();runtime.voice?.pause();}
+    else {reportController.resume();runtime.voice?.start();}
     runtime.keys.clear(); runtime.fireRequested=false;runtime.dodgeRequested=false; runtime.target=undefined;
     runtime.race.racers[0].controller.braking = false;
     setPaused(value);
     setHud(current => ({...current, brake: false}));
-  }, [runtime]);
+  }, [runtime,reportController]);
   const reset = () => {
     pause(true);
+    reportController.reset();setReportConsent(false);
     runtime.race.reset();voiceActions.current.reset(); runtime.clock = 0; runtime.generation++;
     setHud(initialHud);setFixtureNotice('');setVoiceInputNotice(current=>({id:current.id+1,text:'',phase:''}));
   };
 
   const startCountdown=useCallback(()=>{
     runtime.race.selectCharacter(inspected);
+    reportController.begin(voiceActions.current.live?'live':'mock',reportConsent);
     setHud({...initialHud,standings:runtime.race.standings()});
     // Starting a prepared run must keep its loaded fixture and voice setup.
     setSettings(false);setBinding(null);setCountdown(3);setScreen('countdown');
-  },[runtime,inspected]);
+  },[runtime,inspected,reportController,reportConsent]);
   const prepareRun=()=>{reset();setSetupStep('briefing');setSettings(false);setBinding(null);setScreen('setup');};
   const startPreparedRun=(withVoice:boolean)=>{
     if(screenRef.current!=='setup'||runtime.race.elapsed!==0)return false;
@@ -177,6 +202,12 @@ export function MovementTest() {
     };
   }, [runtime, binding, pause, startCountdown]);
 
+  useEffect(()=>{
+    if(screen!=='race'||paused)return;
+    const voiceBusy=['prompted','preparing','recording','transcribing','generating','ready'].includes(voice.host.loop.getSnapshot().phase);
+    reportController.observe(voice.host.creations,race.racers,voiceBusy);
+  },[screen,paused,hud.time,hud.allFinished,voice.state.phase,voice.host,race,reportController]);
+
   return <RaceAlertProvider>
     {screen==='title' ? <LaunchScreen onCommence={()=>setScreen('selection')} music={music}/> : <section className="movement-test">
     <div className="movement-layout">
@@ -215,7 +246,7 @@ export function MovementTest() {
           <button className="begin-exercise" onClick={prepareRun}>{'Begin as '+person.name+' →'}</button>
           <small>Attendance is not optional.</small>
         </div>}
-        {screen==='setup'&&!settings&&<RaceSetup voice={voice} step={setupStep} onStepChange={setSetupStep} steeringHelp={steeringHelp} actionHelp={actionHelp}
+        {screen==='setup'&&!settings&&<RaceSetup voice={voice} {...reportSettings} step={setupStep} onStepChange={setSetupStep} steeringHelp={steeringHelp} actionHelp={actionHelp}
           controls={{steering:[bindings.forward,bindings.left,bindings.backward,bindings.right].map(label),boost:label(bindings.boost),use:label(bindings.use)}}
           onStart={()=>startPreparedRun(true)} onSkipVoice={()=>startPreparedRun(false)} onBack={returnToPersonnel}/>}
         {screen==='countdown'&&<div className="exercise-start-screen" role="status" aria-live="polite" aria-atomic="true">
@@ -230,7 +261,7 @@ export function MovementTest() {
         <div className="race-place">{hud.place} / 4 <small>POSITION</small></div>
         <RaceOverlay hud={hud} paused={paused} useKey={label(bindings.use)} boostKey={label(bindings.boost)} dodgeKey={label(bindings.dodge)}/>
         {!paused && hud.finish === null && hud.remaining <= 100 && <RaceAlert><div className="race-countdown">{Math.ceil(hud.remaining)} m<br/><small>PREPARE FOR LANDING</small></div></RaceAlert>}
-        {!paused && hud.finish !== null && <div className="race-result"><strong>EXERCISE COMPLETE · {hud.place} / 4</strong><span>{hud.incidents===0?'Safety inspection: exemplary preparedness.':'Safety inspection: '+hud.incidents+(hud.incidents===1?' incident.':' incidents.')+' Refresher training assigned.'}</span><span>{hud.finish.toFixed(2)} seconds · {hud.allFinished ? 'Everyone landed.' : 'Watch the others land…'}</span><button onClick={prepareRun}>Race again</button><RaceCreations creations={voice.host.creations} racers={race.racers}/></div>}
+        {!paused && hud.finish !== null && <div className="race-result"><strong>EXERCISE COMPLETE · {hud.place} / 4</strong><span>{hud.incidents===0?'Safety inspection: exemplary preparedness.':'Safety inspection: '+hud.incidents+(hud.incidents===1?' incident.':' incidents.')+' Refresher training assigned.'}</span><span>{hud.finish.toFixed(2)} seconds · {hud.allFinished ? 'Everyone landed.' : 'Watch the others land…'}</span><button onClick={prepareRun}>Race again</button><RaceCreations creations={voice.host.creations} racers={race.racers} reports={incidentReports}/></div>}
         <RaceCreationHud enabled={voice.enabled} key={voice.host.runId} host={voice.host} paused={paused} finished={hud.finish!==null} marker={hud.creationMarker} steeringKeys={[bindings.forward,bindings.left,bindings.backward,bindings.right].map(label).join(' / ')} live={!!voice.live} mockText={voice.mockText} blockedReason={voiceBlockedReason} inputNotice={voiceInputNotice} microphone={microphone}/>
         {paused && !settings && <div className="movement-pause"><span className="safety-caution">⚠ CAUTION</span><h2>Mandatory fall protection training</h2><p>{label(bindings.forward)}{label(bindings.left)}{label(bindings.backward)}{label(bindings.right)} to steer · hold {label(bindings.brake)} to brake</p>
           <p>{voice.enabled?<>Collect ★, then hold Space to report a hazard.<br/>Pausing during a voice attempt cancels it.</>:<>Prepared safety drill · no voice required.<br/>Fly through the glowing halo to activate it. Any racer can trigger it.</>}</p>
@@ -248,7 +279,7 @@ export function MovementTest() {
         <details className="race-detail"><summary>How to play</summary><RaceBriefing steeringHelp={steeringHelp} actionHelp={actionHelp}/></details>
         {import.meta.env.DEV&&<details className="race-detail">
           <summary>Voice setup <small>{microphone.ready?'Microphone ready':'Enable microphone before racing'}</small></summary>
-          <RaceVoiceControls voice={voice} paused={paused}/>
+          <RaceVoiceControls voice={voice} paused={paused} {...reportSettings}/>
         </details>}
         {import.meta.env.DEV&&<details className="race-detail">
           <summary>Safety drills & legacy fixtures <small>Local gameplay test · no API calls</small></summary>

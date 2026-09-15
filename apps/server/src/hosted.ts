@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { buildPipeline } from './generation/pipeline-bootstrap.js';
 import { resolveAPIKey } from './generation/pipeline-config.js';
+import { buildRaceReports } from './race-reports/bootstrap.js';
 
 export function buildHostedApp(env:NodeJS.ProcessEnv = process.env) {
   // Keys alone cannot enable spending. Previews always stay mock-only.
@@ -21,5 +22,5 @@ export function buildHostedApp(env:NodeJS.ProcessEnv = process.env) {
   if (!liveEnabled) for (const profile of pipeline.profiles) {
     if (profile.mode === 'live') profile.unavailableReason = 'Paid generation is disabled on this deployment.';
   }
-  return buildApp({pipeline,allowedOrigin:value=>origin !== undefined && value === origin});
+  return buildApp({pipeline,reports:buildRaceReports(env,pipeline),allowedOrigin:value=>origin !== undefined && value === origin});
 }

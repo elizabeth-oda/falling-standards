@@ -50,6 +50,8 @@ export class RaceEventHost {
   private voiceNumber:1|2=1;
   private secondStarDepth=0;
   private opportunitiesClosed=false;
+  /** Hold a saved second grant until the shared paid slot is released. */
+  paidReportPending?:()=>boolean;
   private opportunity:RaceVoiceOpportunitySnapshot={secondStar:'scheduled',message:''};
   private readonly opportunityListeners=new Set<()=>void>();
   getSnapshot=()=>this.opportunity;
@@ -216,6 +218,11 @@ export class RaceEventHost {
     // Voice work must settle first, including placement of a ready first result.
     // A spawned first object and its active effect remain entirely runtime-owned.
     if(!['spawned','activated','missed','failed'].includes(this.loop.getSnapshot().phase))return;
+    if(this.paidReportPending?.()) {
+      if(this.opportunity.message!=='Second request saved. Waiting for the incident report to finish.')
+        this.updateSecondStar('collected','Second request saved. Waiting for the incident report to finish.');
+      return;
+    }
     this.attemptNumber=2;
     this.updateSecondStar('consumed','');
     this.loop.rearm();this.loop.start();this.loop.collectVoice();

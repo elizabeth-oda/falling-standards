@@ -66,7 +66,7 @@ Skip this section for normal development or mock testing. One server-side key se
    bun run dev:live
    ```
 
-4. In race setup, enable the microphone, select **Live AI**, and choose **Start with voice**. After collecting a star, deliberately hold Space to record. The run offers at most two paid voice attempts (up to six API calls total). In the lab, choose a live profile and record or submit the prompt. There is no separate payment opt-in checkbox.
+4. In race setup, enable the microphone, select **Live AI**, and choose **Start with voice**. After collecting a star, deliberately hold Space to record. The run offers at most two paid voice attempts (up to six API calls total). In the lab, choose a live profile and record or submit the prompt. Voice and generation have no separate payment opt-in checkbox; the optional incident-report feature retains its own setting.
 
 `bun run dev`, builds, tests, and the ordinary server start keep paid mode disabled even if a key is present. Starting `dev:live` exposes the paid option; it does not itself make a provider call. Refreshing profiles reports local configuration, not whether the provider accepts your key or model.
 
@@ -168,3 +168,9 @@ The recorder captures audio; transcription returns words; generation returns val
 Run [the contributor checks](../CONTRIBUTING.md#check-your-work), then try the mock game flow above in Chrome or Edge. Tests use fake media devices, canned uploads, and intercepted provider responses. They cover recording cleanup, attempt admission, deadlines, invalid input, and stale results without real credentials. Second-star checks advance the actual 120 Hz race through first-star travel, recording, and response delay; they cover success, failure, timeout, missed pickups, uncollected objects, active effects, boosts, saved grants, and cancellation. In Chrome or Edge, verify a successful first mock encounter followed by the second star, plus pause/reset during pending voice work.
 
 A real microphone/live quality test is a separate deliberate action. Record the browser, selected profile, recognized text, timings, and outcome; never include audio or keys in a report.
+
+## Optional incident reports after events
+
+The main race retains the separate, default-off **Include an AI incident report when each event ends** setting. It permits up to two additional paid generation calls, one per completed/expired event. Voice creation permits two attempts and up to six paid calls without a separate payment checkbox; with reporting enabled, the combined ceiling is eight paid calls plus the existing moderation requests. Report attempts consume the same allowance and busy slot, so capacity may run out before every optional report is written.
+
+Reports wait to submit while local voice work is pending. If the second voice star is collected during a running report, its saved grant waits before opening the speaking window. Capture (8 seconds), transcription (10 seconds), generation (30 seconds), two voice opportunities, and no-retry behavior remain unchanged. Reports use their own short deadline and separate cancellation identity. Pause/reset/navigation cancel them and retain the authored factual summary; opening the created-items viewer does not dispatch work. Fixture/replay reports stay local and free. See [incident reports](race-incident-report-proposal.md).

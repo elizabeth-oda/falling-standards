@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { safetyDrillFixtures } from '@sky/shared';
 import { RaceVoiceSetup, type RaceVoiceController } from '../voice/RaceVoiceControls';
+import type { RaceReportSettingsProps } from './RaceReportSettings';
 
 export function RaceBriefing({steeringHelp, actionHelp}: {steeringHelp: string; actionHelp: string}) {
   return <>
@@ -20,7 +21,7 @@ export function RaceBriefing({steeringHelp, actionHelp}: {steeringHelp: string; 
 
 export type RaceSetupStep = 'briefing' | 'voice';
 
-export function RaceSetup({voice, step, onStepChange, controls, steeringHelp, actionHelp, onStart, onSkipVoice, onBack}: {
+export function RaceSetup({voice, step, onStepChange, controls, steeringHelp, actionHelp, onStart, onSkipVoice, onBack, ...reportSettings}: RaceReportSettingsProps & {
   voice: RaceVoiceController;
   step: RaceSetupStep;
   onStepChange: (step: RaceSetupStep) => void;
@@ -86,7 +87,7 @@ export function RaceSetup({voice, step, onStepChange, controls, steeringHelp, ac
           <li><strong>Hold Space and speak</strong><span>Up to 10 words · Release to submit · 8 s max</span></li>
           <li><strong>Fly through the halo</strong><span>The first racer starts the drill for everyone.</span></li>
         </ol>
-        <RaceVoiceSetup voice={voice}/>
+        <RaceVoiceSetup voice={voice} {...reportSettings}/>
         <div className="race-setup-actions">
           <p id="race-setup-readiness" role="status">{readiness.message}</p>
           <div>
