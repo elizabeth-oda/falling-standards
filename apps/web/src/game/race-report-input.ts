@@ -1,15 +1,25 @@
-import { RaceReportInputSchema, type RaceReportInput } from '@sky/shared';
+import { encounterDurationSeconds, RaceReportInputSchema, type RaceReportInput } from '@sky/shared';
 import type { RaceCreationRecord } from './race-creation-history';
 import type { PracticeRace } from './practice-race';
 
+export type RaceReportLineup = readonly Pick<PracticeRace['racers'][number], 'id' | 'model'>[];
+
+/** Final landing can end an active effect before its authored duration elapses. */
+export function raceReportOutcome(record: RaceCreationRecord): RaceReportInput['outcome'] {
+  const snapshot = record.snapshot, triggered = snapshot?.triggererId !== undefined;
+  const reason = snapshot?.expirationReason;
+  if (record.status === 'discarded') return 'discarded';
+  if (triggered && reason === 'complete' && snapshot.elapsedSeconds >= encounterDurationSeconds(record.spec) - 1e-8) return 'complete';
+  if (!triggered && reason === 'passed') return 'passed';
+  if (!triggered && reason === 'lifetime') return 'lifetime';
+  return 'interrupted';
+}
 /** Freeze only declarative outcomes; never send meshes, audio, or transcripts. */
-export function raceReportInput(record:RaceCreationRecord,racers:PracticeRace['racers'],runId:string):RaceReportInput|undefined {
+export function raceReportInput(record:RaceCreationRecord,racers:RaceReportLineup,runId:string):RaceReportInput|undefined {
   if(record.status!=='expired'&&record.status!=='discarded')return;
   const snapshot=record.snapshot, impact=snapshot?.impact, drill=impact?.drill;
   const triggered=snapshot?.triggererId!==undefined;
-  const reason=snapshot?.expirationReason;
-  const outcome=record.status==='discarded'?'discarded':triggered&&reason==='complete'?'complete'
-    :!triggered&&reason==='passed'?'passed':!triggered&&reason==='lifetime'?'lifetime':'interrupted';
+  const outcome=raceReportOutcome(record);
   const list=racers.map(racer=>{
     const id=String(racer.id);
     const value=(counts:Record<string,number>|undefined)=>counts?.[id]??0;

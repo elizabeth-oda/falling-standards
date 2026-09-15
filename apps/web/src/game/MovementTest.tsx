@@ -3,12 +3,12 @@ import { LaunchScreen } from '../launch/LaunchScreen';
 import { RaceCreations } from './RaceCreations';
 import { RaceReportController } from './race-report-controller';
 import { loadRaceReportStatus } from './race-report-client';
-import type { RaceReportStatus } from '@sky/shared';
+import { RaceReportSettings } from './RaceReportSettings';
 import { MusicControls, useGameMusic } from './GameMusic';
 import { Preview } from '../pages/CharacterPage';
 import { CHARACTERS, DEFAULT_CHARACTER_ANGLE } from './characters';
 import type { DinosaurCharacter, GregPose } from './GregModel';
-import { raceEventFixtures, safetyDrillFixtures } from '@sky/shared';
+import { raceEventFixtures, safetyDrillFixtures, type RaceReportStatus } from '@sky/shared';
 import { RaceEventRuntime } from '../race-events/runtime';
 import { RACE_CREATION_PICKUP_RADIUS } from './race-event-config';
 import { RaceEventReport } from './RaceEventReport';
@@ -60,14 +60,13 @@ export function MovementTest() {
     }).catch(()=>{if(!controller.signal.aborted)setReportStatus(undefined);});
     return()=>controller.abort();
   },[voice.profiles]);
-  useEffect(()=>{setReportConsent(false);},[voice.profileId]);
-  useEffect(()=>{
-    voice.host.paidReportPending=()=>reportController.liveRequestPending;
-    return()=>{voice.host.paidReportPending=undefined;reportController.dispose();};
-  },[voice.host,reportController]);
-  const reportSettings={reportConsent,onReportConsentChange:setReportConsent,reportLive:!!voice.live,
-    reportAvailable:!!reportStatus?.available&&(reportStatus.liveUsage.attemptsRemaining>0)};
-
+  useEffect(()=>{setReportConsent(false);reportController.setConsent(false);},[voice.profileId,reportController]);
+  useEffect(()=>()=>reportController.dispose(),[reportController]);
+  const reportSettings=<RaceReportSettings checked={reportConsent} onChange={checked=>{
+    setReportConsent(checked);
+    if(!checked)reportController.setConsent(false);
+  }} live={!!voice.live} available={!!reportStatus?.available && !reportStatus.liveUsage.busy && reportStatus.liveUsage.attemptsRemaining>0}
+    runStarted={screen==='race'||screen==='countdown'}/>;
   const microphone=voice.microphone;
   const readiness=voice.getReadiness();
   const voiceBlockedReason=readiness.ready?'':readiness.message;
@@ -107,7 +106,7 @@ export function MovementTest() {
 
   const startCountdown=useCallback(()=>{
     runtime.race.selectCharacter(inspected);
-    reportController.begin(voiceActions.current.live?'live':'mock',reportConsent);
+    reportController.begin(voiceActions.current.enabled&&voiceActions.current.live?'live':'mock',reportConsent,runtime.race.racers);
     setHud({...initialHud,standings:runtime.race.standings()});
     // Starting a prepared run must keep its loaded fixture and voice setup.
     setSettings(false);setBinding(null);setCountdown(3);setScreen('countdown');
@@ -204,9 +203,10 @@ export function MovementTest() {
 
   useEffect(()=>{
     if(screen!=='race'||paused)return;
-    const voiceBusy=['prompted','preparing','recording','transcribing','generating','ready'].includes(voice.host.loop.getSnapshot().phase);
+    const voiceBusy=['prompted','preparing','recording','transcribing','generating','ready'].includes(voice.host.loop.getSnapshot().phase)
+      || microphone.phase==='preparing'||microphone.phase==='recording';
     reportController.observe(voice.host.creations,race.racers,voiceBusy);
-  },[screen,paused,hud.time,hud.allFinished,voice.state.phase,voice.host,race,reportController]);
+  },[screen,paused,hud,voice.state.phase,microphone.phase,voice.host,race,reportController]);
 
   return <RaceAlertProvider>
     {screen==='title' ? <LaunchScreen onCommence={()=>setScreen('selection')} music={music}/> : <section className="movement-test">
@@ -246,7 +246,7 @@ export function MovementTest() {
           <button className="begin-exercise" onClick={prepareRun}>{'Begin as '+person.name+' →'}</button>
           <small>Attendance is not optional.</small>
         </div>}
-        {screen==='setup'&&!settings&&<RaceSetup voice={voice} {...reportSettings} step={setupStep} onStepChange={setSetupStep} steeringHelp={steeringHelp} actionHelp={actionHelp}
+        {screen==='setup'&&!settings&&<RaceSetup voice={voice} reportSettings={reportSettings} step={setupStep} onStepChange={setSetupStep} steeringHelp={steeringHelp} actionHelp={actionHelp}
           controls={{steering:[bindings.forward,bindings.left,bindings.backward,bindings.right].map(label),boost:label(bindings.boost),use:label(bindings.use)}}
           onStart={()=>startPreparedRun(true)} onSkipVoice={()=>startPreparedRun(false)} onBack={returnToPersonnel}/>}
         {screen==='countdown'&&<div className="exercise-start-screen" role="status" aria-live="polite" aria-atomic="true">
@@ -272,6 +272,7 @@ export function MovementTest() {
       {settings&&<div className="race-dashboard in-game-settings" role="dialog" aria-label="Game settings">
         <div className="settings-heading"><h2>Game settings</h2><button onClick={()=>{setSettings(false);setBinding(null);}}>Close settings</button></div>
         <MusicControls music={music}/>
+        {reportSettings}
         {import.meta.env.DEV&&<RaceEventReport host={voice.host} canReplay={paused||race.finished} onReplay={()=>{
           const spec=voice.host.report?.instance?.spec;if(!spec)return;
           reset();voice.host.loadFixture(spec,true);setScreen('race');setFixtureNotice(spec.displayName+' is 30 m ahead. Resume to replay without API calls.');
@@ -279,7 +280,7 @@ export function MovementTest() {
         <details className="race-detail"><summary>How to play</summary><RaceBriefing steeringHelp={steeringHelp} actionHelp={actionHelp}/></details>
         {import.meta.env.DEV&&<details className="race-detail">
           <summary>Voice setup <small>{microphone.ready?'Microphone ready':'Enable microphone before racing'}</small></summary>
-          <RaceVoiceControls voice={voice} paused={paused} {...reportSettings}/>
+          <RaceVoiceControls voice={voice} paused={paused}/>
         </details>}
         {import.meta.env.DEV&&<details className="race-detail">
           <summary>Safety drills & legacy fixtures <small>Local gameplay test · no API calls</small></summary>

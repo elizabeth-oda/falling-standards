@@ -113,10 +113,12 @@ Set `HOSTED_LIVE_ENABLED=false` and redeploy to disable live AI on the new deplo
 
 To rotate a key, save its replacement as a Secret, redeploy, then revoke the old key. For rollback, choose a known-good mock-only deployment. Never paste keys or raw provider errors into reports.
 
-## Optional paid incident reports
+## Incident-report operation
 
-The game deploys `GET /api/race-reports/status` and `POST /api/race-reports` alongside existing voice/event APIs. Availability reads never call providers. Default development and previews remain mock-only; live reports require the same production/origin gates and the separate, default-off incident-report setting. No additional credential or spending pool is introduced.
+The game release also serves `POST /api/race-reports` and `GET /api/race-reports/status`. The status route is a free configuration read. Default and preview environments cannot dispatch live reports, even when keys exist.
 
-One report may run after each event ends, up to two per run. Reporting adds up to two paid generation calls to the six-call voice ceiling; input/output moderation remains separately accounted. Every report consumes one entry in the existing allowance and shares the single live slot with voice creation. The local default of three attempts cannot cover two voice attempts plus two reports. Exhaustion retains authored reports; do not restart or redeploy to replenish it.
+Players may separately enable **Include an AI incident report after the race — 1 additional paid call** before a live run. A single request batches one or two final voice creations after every racer lands. It shares the existing live-request slot and consumes one allowance entry. The maximum is six voice calls plus one report generation call per run; reports also use up to two content-screening requests. Failed, cancelled, or rejected work after admission consumes its entry and is not retried.
 
-Report deduplication keys (run UUID and creation ID) and attempt IDs are bounded per instance. They reset on cold starts/redeployments and are not shared across instances, just like existing allowance accounting. They are not durable exactly-once or global spending controls. See [incident report behavior and limits](race-incident-report-proposal.md).
+Optional `REPORT_MODEL` and `REPORT_REASONING` override the configured design model for reports. The output cap is fixed at 1,200 tokens. The server deadline is 12 seconds (up to 2.5 seconds input screening, 7 seconds generation, and 2.5 seconds output screening), with a 15-second client timeout. Requests use `store: false`, no tools, and no SDK retries.
+
+The same in-memory admission gate records report run IDs, attempt IDs, and input fingerprints to reject duplicate runs or changed attempts. This metadata is bounded by the per-instance allowance. Cold starts and separate instances retain the limitations above. Report text and race facts are not persisted or logged by the application. Before a paid writing-quality evaluation, obtain separate authorization; free checks establish integration, not live joke quality.

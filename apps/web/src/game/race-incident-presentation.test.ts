@@ -13,7 +13,7 @@ const racers = [{id: 0, name: 'Susan'}, {id: 1, name: 'Greg'}, {id: 2, name: 'Li
 const creation: RaceCreationRecord = {
   instanceId: 'pinball-1', source: 'voice', status: 'expired', spec,
   snapshot: {
-    phase: 'expired', position: [0, -100, 0], elapsedSeconds: 8, remainingSeconds: 0,
+    phase: 'expired', position: [0, -100, 0], elapsedSeconds: 10, remainingSeconds: 0,
     radius: 10, debris: [], affectedRacerIds: [], triggererId: '2', expirationReason: 'complete',
     impact: {participants: ['0', '1', '2', '3'], affectedRacerIds: ['0', '1'], impulseCounts: {}, debrisHits: {},
       blockedDebrisHits: {}, obstacleBlocks: {}, drill: {
@@ -57,7 +57,7 @@ test('completed AI copy is escaped plain text and keeps independent inspection d
 
 test('an event remains provisional while active, and unused outcomes retain the actual reason', () => {
   const active = render(undefined, {...creation, status: 'active', snapshot: {...creation.snapshot!, phase: 'active'}});
-  assert.match(active, /Provisional — event still open/);
+  assert.match(active, /Provisional — racers still on course/);
   assert.match(active, /results can still change/);
   assert.doesNotMatch(active, /The effect finished/);
   const unused = render(undefined, {...creation, snapshot: {...creation.snapshot!, triggererId: undefined, expirationReason: 'passed'}});
@@ -72,15 +72,32 @@ test('free mock findings are clearly identified without a paid AI claim', () => 
   assert.doesNotMatch(html, /AI-written finding|preparing its findings/);
 });
 
-test('paid report consent defaults off, is separate from voice, and describes event-end timing', () => {
+test('paid report consent defaults off, is separate from voice, and describes full-race timing', () => {
   const html = renderToStaticMarkup(createElement(RaceReportSettings, {
-    reportLive: true, reportAvailable: true, onReportConsentChange() {},
+    checked: false, live: true, available: true, onChange() {},
   }));
   assert.match(html, /type="checkbox"/);
   assert.doesNotMatch(html, /checked=/);
-  assert.match(html, /when each event ends/);
-  assert.match(html, /Up to 2 additional paid calls per run, separate from voice creation/);
-  const mock = renderToStaticMarkup(createElement(RaceReportSettings, {onReportConsentChange() {}}));
+  assert.match(html, /after the race/);
+  assert.match(html, /1 additional paid call/);
+  const mock = renderToStaticMarkup(createElement(RaceReportSettings, {checked: false, live: false, available: false, onChange() {}}));
   assert.doesNotMatch(mock, /type="checkbox"/);
-  assert.match(mock, /free, prepared findings in Mock mode/);
+  assert.match(mock, /free, prepared findings/);
+});
+
+test('an expired earlier item remains provisional until the rest of the race finishes', () => {
+  const html = render({...fallback, status: 'provisional'});
+  assert.match(html, /Provisional — racers still on course/);
+  assert.ok(html.includes(fallback.finding));
+  assert.doesNotMatch(html, /preparing its findings/);
+});
+
+test('inspection details retain interrupted activity and the cumulative number of path echoes', () => {
+  const truncated = render(undefined, {...creation, snapshot: {...creation.snapshot!, elapsedSeconds: 0.5}});
+  assert.match(truncated, /recorded activity ended before the effect completed/);
+  assert.doesNotMatch(truncated, /The effect finished/);
+  const echoSpec = safetyDrillFixtures.find(item => item.spec.drill.family === 'reconstruction')!.spec;
+  const echoes = render(undefined, {...creation, spec: echoSpec, snapshot: {...creation.snapshot!,
+    impact: {...creation.snapshot!.impact!, drill: {...creation.snapshot!.impact!.drill!, reactions: 7}}}});
+  assert.match(echoes, /<dt>Path echoes created<\/dt><dd>7<\/dd>/);
 });

@@ -129,8 +129,12 @@ test('HTTP boundary rejects unconfirmed, malformed, and foreign-origin paid requ
       const response = await app.inject({method:'POST',url:'/api/lab/creations',payload});
       assert.equal(response.statusCode,400);
     }
-    const foreign = await app.inject({method:'POST',url:'/api/lab/creations',headers:{origin:'https://untrusted.example'},payload:request()});
-    assert.equal(foreign.statusCode,403);assert.equal(calls,0);
+    for (const origin of ['https://untrusted.example','http://localhost:5173/path','http://user@localhost:5173',
+      'http://localhost:5173?query','http://localhost:5173#fragment','null']) {
+      const foreign = await app.inject({method:'POST',url:'/api/lab/creations',headers:{origin},payload:request()});
+      assert.equal(foreign.statusCode,403,origin);
+    }
+    assert.equal(calls,0);
     const confirmed = await app.inject({method:'POST',url:'/api/lab/creations',headers:{origin:'http://localhost:5173'},payload:request()});
     assert.equal(confirmed.statusCode,200);assert.equal(calls,2);
     const status = PipelineProfilesSchema.parse((await app.inject({method:'GET',url:'/api/lab/profiles'})).json());
@@ -151,24 +155,27 @@ test('500-attempt allowance and duplicate IDs belong to one in-memory instance',
   assert.equal(anotherInstance.status.attemptsRemaining,499);
 });
 
-test('report admission shares the allowance, deduplicates each event, and caps reports per run', () => {
+
+test('report admission shares the allowance and permits only one batch per run', () => {
   const gate=new LiveAttempts({enabled:true,maxAttempts:4});
-  const runId=randomUUID(), first={runId,creationId:'first'};
+  const runId=randomUUID(), first={runId,inputFingerprint:'a'.repeat(64)};
   const attempt=request();
   const release=gate.acquire(attempt,first);
   assert.equal(gate.status.busy,true);
   assert.throws(()=>gate.acquire(request(),first),code('DUPLICATE_ATTEMPT'));
-  assert.throws(()=>gate.acquire(request(),{runId,creationId:'second'}),code('LIVE_BUSY'));
+  assert.throws(()=>gate.acquire(request(),{runId:randomUUID(),inputFingerprint:'b'.repeat(64)}),code('LIVE_BUSY'));
   release();
-  const changed={...attempt,text:'changed payload'};
-  assert.throws(()=>gate.acquire(changed,first),code('DUPLICATE_ATTEMPT'));
-  assert.throws(()=>gate.acquire(request(),first),code('DUPLICATE_ATTEMPT'));
-  gate.acquire(request(),{runId,creationId:'second'})();
-  assert.throws(()=>gate.acquire(request(),{runId,creationId:'third'}),code('LIVE_LIMIT_REACHED'));
-  gate.acquire(request())();
-  gate.acquire(request(),{runId:randomUUID(),creationId:'first'})();
+  const changed={...first,inputFingerprint:'c'.repeat(64)};
+  assert.throws(()=>gate.acquire(attempt,changed),code('DUPLICATE_ATTEMPT'));
+  assert.throws(()=>gate.acquire(request(),changed),code('DUPLICATE_ATTEMPT'));
+  const releaseVoice=gate.acquire(request());
+  release(); // A previously released attempt must not unlock a newer owner's slot.
+  assert.equal(gate.status.busy,true);
+  releaseVoice();
+  gate.acquire(request(),{runId:randomUUID(),inputFingerprint:'d'.repeat(64)})();
+  gate.acquire(request(),{runId:randomUUID(),inputFingerprint:'e'.repeat(64)})();
   assert.equal(gate.status.attemptsRemaining,0);
-  assert.throws(()=>gate.acquire(request(),{runId:randomUUID(),creationId:'first'}),code('LIVE_LIMIT_REACHED'));
+  assert.throws(()=>gate.acquire(request(),{runId:randomUUID(),inputFingerprint:'f'.repeat(64)}),code('LIVE_LIMIT_REACHED'));
   assert.equal(gate.status.busy,false);
 });
 
@@ -178,7 +185,7 @@ test('an injected admission instance is the pipeline gate without another allowa
     {mock:{run:responseFor},live:{run:responseFor}},undefined,undefined,undefined,
     {mock:mockContentGuard,live:mockContentGuard},gate);
   assert.equal(pipeline.admissionGate,gate);
-  gate.acquire(request(),{runId:randomUUID(),creationId:'report-event'})();
+  gate.acquire(request(),{runId:randomUUID(),inputFingerprint:'a'.repeat(64)})();
   await assert.rejects(pipeline.run(request()),code('LIVE_LIMIT_REACHED'));
   assert.equal(pipeline.liveUsage.attemptsUsed,1);
 });

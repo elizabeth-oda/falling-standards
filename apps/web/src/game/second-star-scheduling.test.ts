@@ -10,9 +10,7 @@ const dt=1/120;
 const flush=()=>new Promise<void>(resolve=>setImmediate(resolve));
 const hippos=safetyDrillFixtures.find(item=>item.spec.drill.family==='stampede')!.spec;
 
-/** Real fixed-step movement throughout: no teleports, fabricated swept contacts,
- * instant capture, or instant generation. The empty authored course isolates
- * scheduling while retaining rival planning and the real event bridge/runtime. */
+/** Empty-course integration run with real movement, capture timing, and generation timing. */
 function fullRun(boost=false,starRandom:()=>number=()=>.5) {
   const race=new PracticeRace(false,()=>.42,new RaceEventRuntime({pickupContactRadius:RACE_CREATION_PICKUP_RADIUS}));
   let captureStarted=0,captureCount=0,boostGranted=false;

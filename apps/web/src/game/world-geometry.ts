@@ -5,10 +5,11 @@ export function creationSpawnPosition(player: Position, speed: number): Position
 }
 // Swept point/sphere collision accounts for lateral and vertical movement.
 export function sweptPickup(from: Position, to: Position, center: Position, radius: number): boolean {
-  const direction = to.map((value, axis) => value-from[axis]);
-  const lengthSquared = direction.reduce((sum, value) => sum+value*value, 0);
-  const projection = lengthSquared === 0 ? 0 : center.reduce((sum, value, axis) => sum+(value-from[axis])*direction[axis], 0)/lengthSquared;
+  const dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2];
+  const cx = center[0] - from[0], cy = center[1] - from[1], cz = center[2] - from[2];
+  const lengthSquared = dx * dx + dy * dy + dz * dz;
+  const projection = lengthSquared === 0 ? 0 : (cx * dx + cy * dy + cz * dz) / lengthSquared;
   const t = Math.max(0, Math.min(1, projection));
-  const closest: Position = [from[0]+direction[0]*t, from[1]+direction[1]*t, from[2]+direction[2]*t];
-  return distance(closest, center) <= radius;
+  const x = dx * t - cx, y = dy * t - cy, z = dz * t - cz;
+  return radius >= 0 && x * x + y * y + z * z <= radius * radius;
 }

@@ -51,6 +51,26 @@ test('invalid audio/consent is free; invalid transcripts consume a single attemp
     assert.equal(pipeline.liveUsage.attemptsUsed,1);assert.deepEqual(counts(),{speechCalls:1,geometryCalls:0});
   }
 });
+test('audio signatures require exact bytes before a paid attempt is admitted',async()=>{
+  const {pipeline,counts}=harness();
+  const clips=[
+    {bytes:Buffer.from('RIFF1234WAVEaudio'),mimeType:'audio/wav',offsets:[0,8]},
+    {bytes:Buffer.from('1234ftypaudio'),mimeType:'audio/mp4',offsets:[4]},
+    {bytes:Buffer.from([0x1a,0x45,0xdf,0xa3,0]),mimeType:'audio/webm',offsets:[0]},
+  ];
+  for (const {bytes,mimeType,offsets} of clips) {
+    for (const offset of offsets) {
+      const corrupted=Buffer.from(bytes);
+      corrupted[offset]^=0x80;
+      await assert.rejects(pipeline.runVoice({bytes:corrupted,mimeType},request()),failure('INVALID_AUDIO'));
+    }
+    await assert.rejects(pipeline.runVoice({bytes:bytes.subarray(0,3),mimeType},request()),failure('INVALID_AUDIO'));
+  }
+  assert.deepEqual(counts(),{speechCalls:0,geometryCalls:0});
+  assert.equal(pipeline.liveUsage.attemptsUsed,0);
+  for (const clip of clips) await pipeline.runVoice(clip,request(),{transcribeOnly:true});
+  assert.deepEqual(counts(),{speechCalls:3,geometryCalls:0});
+});
 test('speech cancellation and deadline abort active work and release the global slot',async()=>{
   for(const cancelled of [false,true]){
     let dispatch!:()=>void;const started=new Promise<void>(resolve=>{dispatch=resolve;});let signal:AbortSignal|undefined;

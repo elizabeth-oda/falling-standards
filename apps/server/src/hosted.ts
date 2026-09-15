@@ -1,7 +1,7 @@
+import { buildRaceReports } from './race-reports/bootstrap.js';
 import { buildApp } from './app.js';
 import { buildPipeline } from './generation/pipeline-bootstrap.js';
 import { resolveAPIKey } from './generation/pipeline-config.js';
-import { buildRaceReports } from './race-reports/bootstrap.js';
 
 export function buildHostedApp(env:NodeJS.ProcessEnv = process.env) {
   // Keys alone cannot enable spending. Previews always stay mock-only.

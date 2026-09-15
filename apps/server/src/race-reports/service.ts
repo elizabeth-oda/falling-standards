@@ -13,6 +13,7 @@ const defaults:Budgets = {totalMs:12_000,generationMs:7_000,screeningMs:2_500};
 
 /** Own deadlines even when a provider/test adapter ignores AbortSignal. */
 async function bounded<T>(work:(signal:AbortSignal)=>Promise<T>,signal:AbortSignal,ms:number):Promise<T> {
+  if (ms<=0) throw new PipelineFailure('TIMEOUT','The incident report deadline was reached. No retry was made.');
   const controller = new AbortController();
   const cancel=()=>controller.abort(signal.reason);
   signal.addEventListener('abort',cancel,{once:true});
@@ -35,7 +36,7 @@ async function bounded<T>(work:(signal:AbortSignal)=>Promise<T>,signal:AbortSign
   }
 }
 
-/** Reports share creation admission but have their own post-event lifetime. */
+/** Reports share creation admission but have their own post-race lifetime. */
 export class RaceReportService {
   constructor(readonly admissionGate:LiveAttempts,private config:StageConfig,
     private live?:{transport:RaceReportTransport;guard:ContentGuard},private budgets:Budgets=defaults) {}
@@ -48,39 +49,43 @@ export class RaceReportService {
   async run(value:RaceReportRequest,options:{signal?:AbortSignal}={}):Promise<RaceReportResponse> {
     const parsed=RaceReportRequestSchema.safeParse(value);
     if(!parsed.success||Buffer.byteLength(JSON.stringify(parsed.data),'utf8')>4096)
-      throw new PipelineFailure('INVALID_REQUEST','Provide a valid completed-event summary within the report size limit.');
+      throw new PipelineFailure('INVALID_REQUEST','Provide a valid finalized race summary within the report size limit.');
     const request=parsed.data;
-    const fingerprint=await raceReportInputFingerprint(request.input);
+    const fingerprint=await raceReportInputFingerprint(request.inputs);
     if(fingerprint!==request.inputFingerprint)throw new PipelineFailure('INVALID_REQUEST','The incident report input fingerprint did not match.');
     if(options.signal?.aborted)throw new PipelineFailure('CANCELLED','Incident report cancelled.');
-    const response=(report:ReturnType<typeof authoredRaceReport>)=>RaceReportResponseSchema.parse({
-      runId:request.input.runId,creationId:request.input.creationId,inputFingerprint:fingerprint,
-      attemptId:request.paidAttempt?.id??null,report,
+    const response=(content:ReturnType<typeof validateRaceReportContent>)=>RaceReportResponseSchema.parse({
+      runId:request.inputs[0].runId,inputFingerprint:fingerprint,
+      attemptId:request.paidAttempt?.id??null,items:content.items,
     });
     // Mock reports are entirely authored; even supplied live credentials cannot dispatch.
-    if(request.mode==='mock')return response(authoredRaceReport(request.input));
+    if(request.mode==='mock')return response({items:request.inputs.map(input=>({creationId:input.creationId,...authoredRaceReport(input)}))});
     if(!this.admissionGate.status.enabled)throw new PipelineFailure('LIVE_DISABLED','Paid incident reports are disabled.');
     if(!this.live)throw new PipelineFailure('NOT_CONFIGURED','The incident report provider is not configured.');
-    const release=this.admissionGate.acquire(request,{runId:request.input.runId,creationId:request.input.creationId});
+    const release=this.admissionGate.acquire(request,{runId:request.inputs[0].runId,inputFingerprint:fingerprint});
     const controller=new AbortController();
     const cancel=()=>controller.abort(new PipelineFailure('CANCELLED','Incident report cancelled.'));
     options.signal?.addEventListener('abort',cancel,{once:true});
     if(options.signal?.aborted)cancel();
     const started=performance.now();
-    const remaining=()=>this.budgets.totalMs-(performance.now()-started);
+    const stageBudget=(limit:number)=>{
+      const remaining=Math.min(limit,this.budgets.totalMs-(performance.now()-started));
+      if (remaining<=0) throw new PipelineFailure('TIMEOUT','The incident report deadline was reached. No retry was made.');
+      return remaining;
+    };
     const live=this.live;
     try {
       return await bounded(async signal=>{
-        const evidence=buildRaceReportEvidence(request.input);
-        await screenContent(live.guard,[request.input.displayName],signal,Math.min(this.budgets.screeningMs,remaining()));
+        const items=request.inputs.map(input=>({input,evidence:buildRaceReportEvidence(input)}));
+        await screenContent(live.guard,request.inputs.map(input=>input.displayName),signal,stageBudget(this.budgets.screeningMs));
         signal.throwIfAborted();
-        const output=await bounded(child=>live.transport.run({input:request.input,evidence,config:{...this.config,maxOutputTokens:1200},signal:child}),
-          signal,Math.min(this.budgets.generationMs,remaining()));
+        const output=await bounded(child=>live.transport.run({items,config:{...this.config,maxOutputTokens:1200},signal:child}),
+          signal,stageBudget(this.budgets.generationMs));
         signal.throwIfAborted();
-        let report:ReturnType<typeof authoredRaceReport>;
-        try {report=validateRaceReportContent(request.input,output);}
+        let report:ReturnType<typeof validateRaceReportContent>;
+        try {report=validateRaceReportContent(request.inputs,output);}
         catch {throw new PipelineFailure('INVALID_DESIGN','The incident report contained invalid or unsupported evidence.');}
-        await screenContent(live.guard,[report.headline,report.finding],signal,Math.min(this.budgets.screeningMs,remaining()));
+        await screenContent(live.guard,report.items.flatMap(item=>[item.headline,item.finding]),signal,stageBudget(this.budgets.screeningMs));
         signal.throwIfAborted();
         return response(report);
       },controller.signal,this.budgets.totalMs);

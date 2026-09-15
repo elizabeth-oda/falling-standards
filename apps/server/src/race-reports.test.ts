@@ -28,12 +28,14 @@ const input=(runId:string=randomUUID(),creationId='event-1'):RaceReportInput=>Ra
     {racerId:'3',characterId:'susan',metrics:{bounces:0}},
   ],
 });
-async function request(value=input(),mode:'mock'|'live'='live'):Promise<RaceReportRequest> {
-  return {input:value,inputFingerprint:await raceReportInputFingerprint(value),mode,
+const authoredBatch=(values:RaceReportInput[])=>({items:values.map(value=>({creationId:value.creationId,...authoredRaceReport(value)}))});
+async function request(value:RaceReportInput|RaceReportInput[]=input(),mode:'mock'|'live'='live'):Promise<RaceReportRequest> {
+  const inputs=Array.isArray(value)?value:[value];
+  return {inputs,inputFingerprint:await raceReportInputFingerprint(inputs),mode,
     ...(mode==='live'?{paidAttempt:{id:randomUUID(),confirmed:true as const}}:{})};
 }
 const hasCode=(expected:string)=>(error:unknown)=>error instanceof PipelineFailure&&error.code===expected;
-function harness(transport:RaceReportTransport={run:async request=>authoredRaceReport(request.input)},
+function harness(transport:RaceReportTransport={run:async request=>authoredBatch(request.items.map(item=>item.input))},
   guard:ContentGuard=mockContentGuard,enabled=true,maxAttempts=6,
   budgets?:{totalMs:number;generationMs:number;screeningMs:number}) {
   const fixture=proceduralFixtures[0];
@@ -41,25 +43,27 @@ function harness(transport:RaceReportTransport={run:async request=>authoredRaceR
   const pipeline=new CreationPipeline(pipelineProfiles({OPENAI_API_KEY:'test-report-key'},enabled),
     {mock:{run:async request=>({data:request.stage==='design'?fixture.design:appearanceToRecipe(fixture.appearance)})},
       live:{run:async request=>({data:request.stage==='design'?fixture.design:appearanceToRecipe(fixture.appearance)})}},
-    undefined,undefined,undefined,{mock:mockContentGuard,live:mockContentGuard},gate);
+    undefined,undefined,{mock:{model:'mock',transcribe:async()=>fixture.prompt},
+      live:{model:'test-speech',transcribe:async()=>fixture.prompt}},{mock:mockContentGuard,live:mockContentGuard},gate);
   return {gate,pipeline,reports:new RaceReportService(gate,config,{transport,guard},budgets)};
 }
 
-test('one report uses one generation and two guards while sharing one allowance entry',async()=>{
+test('both creations use one batch generation and two guards while sharing one allowance entry',async()=>{
   const checks:string[][]=[];
   let calls=0;
   const state=harness({run:async modelRequest=>{
     calls++;
     assert.equal(modelRequest.config.maxOutputTokens,1200);
-    assert.ok(modelRequest.evidence.length>=1&&modelRequest.evidence.length<=8);
-    return authoredRaceReport(modelRequest.input);
+    assert.ok(modelRequest.items.every(item=>item.evidence.length>=1&&item.evidence.length<=8));
+    return authoredBatch(modelRequest.items.map(item=>item.input));
   }},{check:async texts=>{checks.push([...texts]);return 'allow';}});
-  const sent=await request();
+  const first=input(),second=input(first.runId,'event-2');
+  const sent=await request([first,second]);
   const result=RaceReportResponseSchema.parse(await state.reports.run(sent));
   assert.equal(calls,1);assert.equal(checks.length,2);
-  assert.deepEqual(checks[0],[sent.input.displayName]);
-  assert.deepEqual(checks[1],[result.report.headline,result.report.finding]);
-  assert.equal(result.runId,sent.input.runId);assert.equal(result.creationId,sent.input.creationId);
+  assert.deepEqual(checks[0],sent.inputs.map(item=>item.displayName));
+  assert.deepEqual(checks[1],result.items.flatMap(item=>[item.headline,item.finding]));
+  assert.equal(result.runId,sent.inputs[0].runId);assert.deepEqual(result.items.map(item=>item.creationId),sent.inputs.map(item=>item.creationId));
   assert.equal(result.attemptId,sent.paidAttempt?.id);assert.equal(result.inputFingerprint,sent.inputFingerprint);
   assert.equal(state.pipeline.liveUsage.attemptsUsed,1);assert.equal(state.pipeline.liveUsage.busy,false);
 });
@@ -70,33 +74,35 @@ test('mock reports never invoke a supplied transport or guard and consume no all
     {check:async()=>{calls++;throw new Error('No screening');}});
   const sent=await request(input(),'mock');
   const result=await state.reports.run(sent);
-  assert.deepEqual(result.report,authoredRaceReport(sent.input));
+  assert.deepEqual(result.items,authoredBatch(sent.inputs).items);
   assert.equal(result.attemptId,null);assert.equal(calls,0);assert.equal(state.gate.status.attemptsUsed,0);
 });
 
-test('reports deduplicate new attempt IDs for the same event and allow only two events per run',async()=>{
+test('one report admission per run rejects new attempts, changed inputs, and second-item requests',async()=>{
   let calls=0;
-  const state=harness({run:async req=>{calls++;return authoredRaceReport(req.input);}});
+  const state=harness({run:async req=>{calls++;return authoredBatch(req.items.map(item=>item.input));}});
   const first=await request();
   await state.reports.run(first);
-  await assert.rejects(state.reports.run(await request(first.input)),hasCode('DUPLICATE_ATTEMPT'));
-  const changed=input(first.input.runId,first.input.creationId);
+  await assert.rejects(state.reports.run(await request(first.inputs)),hasCode('DUPLICATE_ATTEMPT'));
+  const changed=input(first.inputs[0].runId,first.inputs[0].creationId);
   changed.displayName='Changed Avocado';
   await assert.rejects(state.reports.run({...await request(changed),paidAttempt:first.paidAttempt}),hasCode('DUPLICATE_ATTEMPT'));
-  await state.reports.run(await request(input(first.input.runId,'event-2')));
-  await assert.rejects(state.reports.run(await request(input(first.input.runId,'event-3'))),hasCode('LIVE_LIMIT_REACHED'));
+  await assert.rejects(state.reports.run(await request(input(first.inputs[0].runId,'event-2'))),hasCode('DUPLICATE_ATTEMPT'));
+  const next=await request();
+  await assert.rejects(state.reports.run({...next,paidAttempt:first.paidAttempt}),hasCode('DUPLICATE_ATTEMPT'));
+  await state.reports.run(next);
   assert.equal(calls,2);assert.equal(state.gate.status.attemptsUsed,2);
 });
 
 test('invalid input, mismatched fingerprint, missing consent, and early abort are free',async()=>{
   let calls=0;
-  const state=harness({run:async req=>{calls++;return authoredRaceReport(req.input);}});
+  const state=harness({run:async req=>{calls++;return authoredBatch(req.items.map(item=>item.input));}});
   const sent=await request();
   await assert.rejects(state.reports.run({...sent,inputFingerprint:'0'.repeat(64)}),hasCode('INVALID_REQUEST'));
   await assert.rejects(state.reports.run({...sent,paidAttempt:undefined}),hasCode('INVALID_REQUEST'));
   const controller=new AbortController();controller.abort();
   await assert.rejects(state.reports.run(sent,{signal:controller.signal}),hasCode('CANCELLED'));
-  const invalid={...sent,input:{...sent.input,unexpected:'untrusted'}};
+  const invalid={...sent,inputs:[{...sent.inputs[0],unexpected:'untrusted'}]};
   await assert.rejects(state.reports.run(invalid),hasCode('INVALID_REQUEST'));
   assert.equal(calls,0);assert.equal(state.gate.status.attemptsUsed,0);
 });
@@ -112,15 +118,17 @@ test('a report holds the actual creation gate until dispatched cancellation, wit
   const fixture=proceduralFixtures[0];
   await assert.rejects(state.pipeline.run({text:fixture.prompt,profileId:'configured',geometryMode:'primitives',
     paidAttempt:{id:randomUUID(),confirmed:true}}),hasCode('LIVE_BUSY'));
+  await assert.rejects(state.pipeline.runVoice({bytes:Buffer.from('RIFF1234WAVEaudio'),mimeType:'audio/wav'},
+    {profileId:'configured',geometryMode:'primitives',captureMs:1000,paidAttempt:{id:randomUUID(),confirmed:true}}),hasCode('LIVE_BUSY'));
   assert.equal(state.gate.status.attemptsUsed,1);
   controller.abort();await rejected;
   assert.equal(state.gate.status.busy,false);
-  await assert.rejects(state.reports.run(await request(sent.input)),hasCode('DUPLICATE_ATTEMPT'));
+  await assert.rejects(state.reports.run(await request(sent.inputs)),hasCode('DUPLICATE_ATTEMPT'));
 });
 
 test('busy or exhausted creation admission never dispatches or queues a report',async()=>{
   let calls=0;
-  const state=harness({run:async req=>{calls++;return authoredRaceReport(req.input);}},mockContentGuard,true,1);
+  const state=harness({run:async req=>{calls++;return authoredBatch(req.items.map(item=>item.input));}},mockContentGuard,true,1);
   const release=state.gate.acquire({paidAttempt:{id:randomUUID(),confirmed:true}});
   await assert.rejects(state.reports.run(await request()),hasCode('LIVE_BUSY'));
   assert.equal(calls,0);
@@ -135,37 +143,40 @@ test('stalled generation and guard adapters obey deadlines without a retry',asyn
     {totalMs:100,generationMs:30,screeningMs:20});
   await assert.rejects(state.reports.run(await request()),hasCode('TIMEOUT'));
   assert.equal(calls,1);assert.equal(state.gate.status.attemptsUsed,1);assert.equal(state.gate.status.busy,false);
-  const stalled=harness({run:async req=>{calls++;return authoredRaceReport(req.input);}},
+  const stalled=harness({run:async req=>{calls++;return authoredBatch(req.items.map(item=>item.input));}},
     {check:async()=>new Promise(()=>{})},true,3,{totalMs:60,generationMs:30,screeningMs:10});
   await assert.rejects(stalled.reports.run(await request()),hasCode('PROVIDER_UNAVAILABLE'));
   assert.equal(calls,1);assert.equal(stalled.gate.status.busy,false);
 });
 
-test('malformed reports and foreign or duplicate evidence fail closed before output screening',async()=>{
+test('malformed batches and missing, foreign, duplicate, or cross-item evidence fail closed',async()=>{
+  const first=input(),second=input(first.runId,'event-2');
+  const valid=authoredBatch([first,second]);
   const badReports=[
-    {headline:'Too much',finding:'No',evidenceIds:['foreign']},
-    {headline:'Too much',finding:'No',evidenceIds:[]},
-    {headline:'x'.repeat(71),finding:'No',evidenceIds:['unknown']},
-    {headline:'Report',finding:'x'.repeat(181),evidenceIds:['unknown']},
-    {headline:'Report',finding:'No',evidenceIds:['unknown'],extra:'field'},
+    {items:[]},
+    {items:[valid.items[0]]},
+    {items:[valid.items[0],valid.items[0]]},
+    {items:[{...valid.items[0],creationId:'unknown'},valid.items[1]]},
+    {items:[{...valid.items[0],evidenceIds:[valid.items[1].evidenceIds[0]]},valid.items[1]]},
+    {items:[{...valid.items[0],evidenceIds:[valid.items[0].evidenceIds[0],valid.items[0].evidenceIds[0]]},valid.items[1]]},
+    {items:[{...valid.items[0],evidenceIds:[]},valid.items[1]]},
+    {items:[{...valid.items[0],headline:'x'.repeat(71)},valid.items[1]]},
+    {items:[{...valid.items[0],finding:'x'.repeat(181)},valid.items[1]]},
+    {items:[{...valid.items[0],extra:'field'},valid.items[1]]},
+    {...valid,extra:'field'},
   ];
   for(const output of badReports) {
     let checks=0,calls=0;
     const state=harness({run:async()=>{calls++;return output;}},{check:async()=>{checks++;return 'allow';}});
-    await assert.rejects(state.reports.run(await request()),hasCode('INVALID_DESIGN'));
+    await assert.rejects(state.reports.run(await request([first,second])),hasCode('INVALID_DESIGN'));
     assert.equal(calls,1);assert.equal(checks,1);assert.equal(state.gate.status.attemptsUsed,1);
   }
-  const duplicate=harness({run:async req=>{
-    const valid=authoredRaceReport(req.input);
-    return {...valid,evidenceIds:[valid.evidenceIds[0],valid.evidenceIds[0]]};
-  }});
-  await assert.rejects(duplicate.reports.run(await request()),hasCode('INVALID_DESIGN'));
 });
 
 test('input and output content screening both consume the attempt and never repair the report',async()=>{
   for(const blockOn of [1,2]) {
     let checks=0,calls=0;
-    const state=harness({run:async req=>{calls++;return authoredRaceReport(req.input);}},
+    const state=harness({run:async req=>{calls++;return authoredBatch(req.items.map(item=>item.input));}},
       {check:async()=>++checks===blockOn?'block':'allow'});
     await assert.rejects(state.reports.run(await request()),hasCode('REFUSED'));
     assert.equal(calls,blockOn-1);assert.equal(state.gate.status.attemptsUsed,1);assert.equal(state.gate.status.busy,false);
@@ -182,10 +193,12 @@ test('report HTTP boundaries enforce origin, consent, bytes, identity, and sanit
     assert.equal(status.headers['cache-control'],'no-store');
     assert.equal(RaceReportStatusSchema.parse(status.json()).available,true);
     const sent=await request();
-    assert.equal((await post(sent,'https://foreign.example')).statusCode,403);
+    for (const origin of ['https://foreign.example','http://localhost:5173/path','http://user@localhost:5173',
+      'http://localhost:5173?query','http://localhost:5173#fragment','null'])
+      assert.equal((await post(sent,origin)).statusCode,403,origin);
     assert.equal((await post({...sent,paidAttempt:undefined})).statusCode,400);
     assert.equal((await post({...sent,inputFingerprint:'0'.repeat(64)})).statusCode,400);
-    assert.equal((await post({...sent,input:{...sent.input,displayName:'x'.repeat(5000)}})).statusCode,400);
+    assert.equal((await post({...sent,inputs:[{...sent.inputs[0],displayName:'x'.repeat(5000)}]})).statusCode,400);
     assert.equal(calls,0);
     const failed=await post(sent);
     assert.equal(failed.statusCode,502);assert.equal(failed.json().error.code,'PROVIDER_ERROR');
@@ -229,7 +242,7 @@ test('app rejects a second independently injected report allowance',()=>{
 test('report Responses request is schema-derived, capped, tool-free, and non-stored',async()=>{
   let calls=0;
   const sent=input();
-  const report=authoredRaceReport(sent);
+  const report=authoredBatch([sent]);
   const transport=openAIRaceReportTransport('test-fake-key',async(_url,init)=>{
     calls++;
     const body=JSON.parse(String(init?.body));
@@ -242,7 +255,7 @@ test('report Responses request is schema-derived, capped, tool-free, and non-sto
     ]}),{headers:{'content-type':'application/json'}});
   });
   const state=harness(transport);
-  assert.deepEqual((await state.reports.run(await request(sent))).report,report);
+  assert.deepEqual((await state.reports.run(await request(sent))).items,report.items);
   assert.equal(calls,1);
 });
 
@@ -263,4 +276,51 @@ test('SDK refusals, incomplete output, malformed JSON, and provider failures nev
     await assert.rejects(state.reports.run(await request()),hasCode(item.code));
     assert.equal(calls,1);assert.equal(state.gate.status.attemptsUsed,1);assert.equal(state.gate.status.busy,false);
   }
+});
+
+
+test('a report consumes capacity from the same allowance used by full voice generation',async()=>{
+  const state=harness(undefined,undefined,true,2);
+  const fixture=proceduralFixtures[0];
+  const result=await state.pipeline.runVoice({bytes:Buffer.from('RIFF1234WAVEaudio'),mimeType:'audio/wav'},
+    {profileId:'configured',geometryMode:'primitives',captureMs:1000,paidAttempt:{id:randomUUID(),confirmed:true}});
+  assert.equal(result.spec?.displayName,fixture.spec.displayName);
+  await state.reports.run(await request());
+  assert.equal(state.pipeline.liveUsage.attemptsUsed,2);
+  await assert.rejects(state.pipeline.runVoice({bytes:Buffer.from('RIFF1234WAVEaudio'),mimeType:'audio/wav'},
+    {profileId:'configured',geometryMode:'primitives',captureMs:1000,paidAttempt:{id:randomUUID(),confirmed:true}}),hasCode('LIVE_LIMIT_REACHED'));
+});
+
+test('closing an HTTP report cancels generation and releases the shared slot without refund',async()=>{
+  let announce!:()=>void,announceAbort!:()=>void;
+  const started=new Promise<void>(resolve=>{announce=resolve;});
+  const aborted=new Promise<void>(resolve=>{announceAbort=resolve;});
+  const state=harness({run:async req=>{
+    req.signal.addEventListener('abort',announceAbort,{once:true});announce();return new Promise(()=>{});
+  }});
+  const app=buildApp({pipeline:state.pipeline,reports:state.reports});
+  const controller=new AbortController();
+  try {
+    const address=await app.listen({host:'127.0.0.1',port:0});
+    const running=fetch(address+'/api/race-reports',{method:'POST',signal:controller.signal,
+      headers:{'Content-Type':'application/json',Origin:'http://localhost:5173'},body:JSON.stringify(await request())});
+    const rejected=assert.rejects(running);
+    await started;controller.abort();await rejected;await aborted;
+    await new Promise<void>(resolve=>setImmediate(resolve));
+    assert.equal(state.gate.status.busy,false);assert.equal(state.gate.status.attemptsUsed,1);
+  } finally {controller.abort();app.server.closeAllConnections();await app.close();}
+});
+
+
+test('total report deadline clips later stages and prevents any expired stage from dispatching',async()=>{
+  let generations=0;
+  const zero=harness({run:async req=>{generations++;return authoredBatch(req.items.map(item=>item.input));}},
+    {check:async()=>{throw new Error('An expired screening stage must not start');}},true,3,
+    {totalMs:100,generationMs:50,screeningMs:0});
+  await assert.rejects(zero.reports.run(await request()),hasCode('TIMEOUT'));
+  assert.equal(generations,0);assert.equal(zero.gate.status.attemptsUsed,1);assert.equal(zero.gate.status.busy,false);
+  const total=harness({run:async()=>{generations++;return new Promise(()=>{});}},mockContentGuard,true,3,
+    {totalMs:20,generationMs:100,screeningMs:100});
+  await assert.rejects(total.reports.run(await request()),hasCode('TIMEOUT'));
+  assert.equal(generations,1);assert.equal(total.gate.status.busy,false);
 });

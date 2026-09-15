@@ -1,24 +1,23 @@
 import React from 'react';
+
 export type RaceReportSettingsProps = {
-  reportConsent?: boolean;
-  onReportConsentChange?: (confirmed: boolean) => void;
-  reportAvailable?: boolean;
-  reportLive?: boolean;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  live: boolean;
+  available: boolean;
+  runStarted?: boolean;
 };
 
-/** Separate, run-local consent; enabling voice never enables paid reporting. */
-export function RaceReportSettings({reportConsent = false, onReportConsentChange,
-  reportAvailable = false, reportLive = false, disabled = false}: RaceReportSettingsProps & {disabled?: boolean}) {
-  if (!onReportConsentChange) return null;
-  return <div className="race-report-settings">
-    {reportLive ? <>
-      <label className="voice-consent">
-        <input type="checkbox" checked={reportConsent} disabled={disabled || (!reportAvailable && !reportConsent)}
-          onChange={event => onReportConsentChange(event.target.checked)}/>
-        Include an AI incident report when each event ends
+export function RaceReportSettings({checked, onChange, live, available, runStarted = false}: RaceReportSettingsProps) {
+  return <section className="race-report-settings" aria-label="Incident report settings">
+    {live ? <>
+      <label>
+        <input type="checkbox" checked={checked} disabled={!checked && (!available || runStarted)}
+          onChange={event => onChange(event.target.checked)}/>
+        Include an AI incident report after the race — 1 additional paid call
       </label>
-      <small>Up to 2 additional paid calls per run, separate from voice creation. Failed or cancelled reports may still cost credits. An authored report is always available.</small>
-      {!reportAvailable && <small>AI incident reports are unavailable for this session.</small>}
-    </> : <small>Incident reports use free, prepared findings in Mock mode.</small>}
-  </div>;
+      <small>One request covers both creations after everyone lands. Failed or cancelled requests may still cost credits. Recorded facts and a prepared finding are always available.</small>
+      {!available && <small>AI incident reports are unavailable for this session.</small>}
+    </> : <p>Incident reports use free, prepared findings.</p>}
+  </section>;
 }

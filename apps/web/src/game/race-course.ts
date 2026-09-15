@@ -1,5 +1,8 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import type { Position } from './player-controller';
+import { sweptPickup as segmentSphere } from './world-geometry';
+
+export { segmentSphere };
 
 export type Item = 'parachute' | 'bubbleWrap' | 'airCanister';
 export const ITEM_NAMES: Record<Item,string> = {parachute:'Spare parachute',bubbleWrap:'Bubble wrap',airCanister:'Emergency air canister'};
@@ -71,12 +74,6 @@ export function obstaclePose(obstacle:Obstacle,time:number) {
   if(obstacle.kind==='balloon') p[0]+=Math.sin(time*0.4+obstacle.id)*2;
   const rotation:Position=[obstacle.rotation[0]+(obstacle.kind==='fridge'?time*0.35:0),obstacle.rotation[1]+time*0.3,obstacle.rotation[2]];
   return {position:p,rotation};
-}
-export function segmentSphere(a:Position,b:Position,center:Position,radius:number) {
-  const d=new Vector3(...b).sub(new Vector3(...a));
-  const offset=new Vector3(...center).sub(new Vector3(...a));
-  const t=Math.max(0,Math.min(1,offset.dot(d)/(d.lengthSq()||1)));
-  return new Vector3(...a).addScaledVector(d,t).distanceToSquared(new Vector3(...center))<=radius*radius;
 }
 // Transform the swept player segment into each authored collider's local space.
 // The expanded box is a conservative sphere-vs-box approximation at corners.

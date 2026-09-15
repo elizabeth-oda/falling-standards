@@ -21,13 +21,13 @@ Run `bun install --frozen-lockfile` and `bun run dev` from the repository root, 
 1. Select a character and choose **Begin as [name]**.
 2. Keep **Mock** selected in the pre-flight setup and choose a prepared prompt.
 3. Click **Enable microphone** and allow access. The main race keeps that input open so repeat checks and both voice stars can reuse it without reopening the device. No clip is recorded until you hold Space, and enabling the microphone does not call a provider. Pause, restart, leaving, or finishing releases the input and clears microphone readiness. Enable it again in setup or the pause menu before using voice; the race never silently reopens a released device at a star. In development, reload the page after microphone code changes so Fast Refresh cannot retain an old recorder instance. Opening the device has a separate 10-second timeout; if it stalls, check browser permission and your selected input device, then try the check again. The lab retains its separate open/release capture behavior.
-4. Choose **Start with voice**. Staying at the starting horizontal position lets you reach the yellow star at 180 m depth.
+4. Choose the **Start with prepared hazard** or **Start with Live AI** button. Staying at the starting horizontal position lets you reach the yellow star at 180 m depth.
 5. After collecting it, hold Space, speak, and release. The HUD shows the simulated transcript and creation progress.
 6. Keep racing and follow the radar to the generated object. It appears later in the course, not immediately beside you. Fly through its glowing halo; the first racer to reach it activates the effect.
 
-To play without a microphone, select a prepared prompt and choose **Play without voice** instead of enabling the microphone. The setup names the selected drill beside that button, even if Live AI is selected. The drill uses normal course placement and shared activation, with no recording, transcription, generation, or payment opt-in. Follow its radar and glowing halo; ordinary items remain available.
+To play without a microphone, select a prepared prompt and choose **Race without voice** instead of enabling the microphone. The setup names the selected drill beside that button, even if Live AI is selected. The drill uses normal course placement and shared activation, with no recording, transcription, generation, or payment opt-in. Follow its radar and glowing halo; ordinary items remain available.
 
-You have 10 gameplay seconds after a collected grant becomes available to start speaking. Recording auto-submits after 8 seconds. Each normal voice-enabled run offers two stars if you reach their locations, with one fresh attempt per star; failure, cancellation, or missing a star consumes that opportunity. Restart returns to setup and resets the two-attempt run counter. **Play without voice** skips all microphone setup and includes one prepared safety drill.
+You have 10 gameplay seconds after a collected grant becomes available to start speaking. Recording auto-submits after 8 seconds. Each normal voice-enabled run offers two stars if you reach their locations, with one fresh attempt per star; failure, cancellation, or missing a star consumes that opportunity. Restart returns to setup and resets the two-attempt run counter. **Race without voice** skips all microphone setup and includes one prepared safety drill.
 
 The second yellow star has a fixed depth chosen randomly between 60% and 70% of the course at the start of each run. It appears with at least 120 m of approach, or four seconds at your current fall speed when that needs more distance. At reveal it aligns with your current horizontal position, then stays fixed. The HUD announces its arrival. The first star's outcome, a waiting generated object, an active effect, and rival progress never suppress this offer. Rivals can activate generated objects, but cannot collect your yellow voice stars.
 
@@ -66,7 +66,7 @@ Skip this section for normal development or mock testing. One server-side key se
    bun run dev:live
    ```
 
-4. In race setup, enable the microphone, select **Live AI**, and choose **Start with voice**. After collecting a star, deliberately hold Space to record. The run offers at most two paid voice attempts (up to six API calls total). In the lab, choose a live profile and record or submit the prompt. Voice and generation have no separate payment opt-in checkbox; the optional incident-report feature retains its own setting.
+4. In race setup, enable the microphone, select **Live AI**, and choose the **Start with prepared hazard** or **Start with Live AI** button. After collecting a star, deliberately hold Space to record. The run offers at most two paid voice attempts (up to six API calls total). In the lab, choose a live profile and record or submit the prompt. Voice and generation have no separate payment opt-in checkbox; the optional incident-report feature retains its own setting.
 
 `bun run dev`, builds, tests, and the ordinary server start keep paid mode disabled even if a key is present. Starting `dev:live` exposes the paid option; it does not itself make a provider call. Refreshing profiles reports local configuration, not whether the provider accepts your key or model.
 
@@ -169,8 +169,10 @@ Run [the contributor checks](../CONTRIBUTING.md#check-your-work), then try the m
 
 A real microphone/live quality test is a separate deliberate action. Record the browser, selected profile, recognized text, timings, and outcome; never include audio or keys in a report.
 
-## Optional incident reports after events
+## Optional incident reports
 
-The main race retains the separate, default-off **Include an AI incident report when each event ends** setting. It permits up to two additional paid generation calls, one per completed/expired event. Voice creation permits two attempts and up to six paid calls without a separate payment checkbox; with reporting enabled, the combined ceiling is eight paid calls plus the existing moderation requests. Report attempts consume the same allowance and busy slot, so capacity may run out before every optional report is written.
+In the Live AI setup step, **Include an AI incident report after the race — 1 additional paid call** is off by default. This option is independent of the two voice attempts. One report request covers both creations after all racers have landed and voice work has been cleaned up. No successful creations means no report request.
 
-Reports wait to submit while local voice work is pending. If the second voice star is collected during a running report, its saved grant waits before opening the speaking window. Capture (8 seconds), transcription (10 seconds), generation (30 seconds), two voice opportunities, and no-retry behavior remain unchanged. Reports use their own short deadline and separate cancellation identity. Pause/reset/navigation cancel them and retain the authored factual summary; opening the created-items viewer does not dispatch work. Fixture/replay reports stay local and free. See [incident reports](race-incident-report-proposal.md).
+The maximum with reporting enabled is six voice/generation calls plus one report generation call, and up to two additional content-screening requests. Reporting consumes one more entry from the existing server allowance; local default 3 and hosted default 500 remain unchanged. A busy or exhausted server leaves the authored report available without retrying.
+
+Opening or closing the creation viewer never dispatches a request. Pause, reset, and navigation abort reporting and reject late responses. Prepared drills, replay, and mock runs use free authored findings. Report payloads exclude audio, transcripts, prompts, and geometry. See [the incident-report guide](race-incident-report-proposal.md).

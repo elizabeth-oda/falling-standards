@@ -72,3 +72,8 @@
 .race-incident-details .race-creation-assessment b{display:block;margin-bottom:5px}
 .race-report-settings{border-top:1px solid #627785;padding-top:12px;margin:12px 0}
 .race-report-settings>small{display:block;line-height:1.5;margin-top:6px}
+
+.race-report-settings label{display:flex;align-items:flex-start;gap:12px;font-size:16px;line-height:1.5}
+.race-report-settings input{flex:none;width:20px;height:20px;margin:3px 0 0;accent-color:#f0c928}
+.race-report-settings input:focus-visible{outline:3px solid #f0c928;outline-offset:4px}
+.race-setup .race-report-settings small{font-size:15px}

@@ -134,3 +134,7 @@ Keep family-specific state and equations out of the generic collection/voice lif
 6. Run `bun run build`, `bun run typecheck`, and `bun run test`, then inspect the new fixture in the lab and actual race. Test unfamiliar live prompts only with explicit paid-test approval; mocks and intercepted SDK tests cannot establish interpretation quality.
 
 Existing v4 recipes must remain valid. If adding a family to v4, deploy server and client together: an older client will correctly reject an unfamiliar family. Breaking field/meaning changes require an explicit version migration. Keep v1-v3 endpoints and their exercised demo/regression adapters; old does not mean unused.
+
+## Reporting measured results
+
+Incident reporting reads each family's cumulative counters through `race-report-input.ts` and `raceReportMetricKeys` in the shared report contract. New family counters must extend those mappings and their validation/evidence tests together. Report evidence distinguishes delivered from blocked contacts, and sums of racer-seconds from encounter duration. It does not infer harm from bounces, currents, or orbits, or infer relationships not recorded by the runtime. See [incident reports](race-incident-report-proposal.md).

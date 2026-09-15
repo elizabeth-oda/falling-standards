@@ -10,7 +10,10 @@ export interface DrillMechanic {
   getImpact():DrillImpact;
 }
 export type DrillBand = {id:number;origin:EventVector};
-export const increment = (record:Record<string,number>,id:string,amount=1) => {record[id]=(record[id]??0)+amount;};
+export function increment(record:Record<string,number>,id:string,amount=1) {
+  if(!Object.hasOwn(record,id))Object.defineProperty(record,id,{value:0,writable:true,enumerable:true,configurable:true});
+  record[id]+=amount;
+}
 export const midpoint = (a:EventVector,b:EventVector):EventVector => scale(add(a,b),0.5);
 export const emptyDrillImpact = ():Required<DrillImpact> => ({
   collisions:{},blockedCollisions:{},

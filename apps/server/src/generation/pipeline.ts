@@ -21,8 +21,8 @@ export type PipelineOptions = GenerationOptions<PipelineEvent>;
 export class CreationPipeline {
   private readonly liveAttempts:LiveAttempts;
   readonly liveEnabled:boolean;
-  get admissionGate() {return this.liveAttempts;}
   get liveUsage() {return this.liveAttempts.status;}
+  get admissionGate() {return this.liveAttempts;}
   constructor(readonly profiles:PipelineProfile[], private transports:{mock:StageTransport;live?:StageTransport},
     private budgets = {totalMs:PIPELINE_DEADLINE_MS,designMs:DESIGN_BUDGET_MS}, livePolicy?:LivePolicy,
     private speech:{mock:TranscriptionProvider;live?:TranscriptionProvider} = {mock:mockTranscriptionProvider},

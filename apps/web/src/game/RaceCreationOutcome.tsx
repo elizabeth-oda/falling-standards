@@ -1,6 +1,7 @@
 import React from 'react';
 import type { RaceCreationRecord } from './race-creation-history';
 import type { RaceIncidentReportView } from './race-report-controller';
+import { raceReportOutcome } from './race-report-input';
 import { drillAssessment } from './drill-feedback';
 import { drillMetricSummary } from '../race-events/drill-metrics';
 
@@ -9,7 +10,8 @@ const total = (counts: Record<string, number> = {}) => Object.values(counts).red
 
 function lifecycleText(creation: RaceCreationRecord) {
   if (creation.snapshot?.triggererId !== undefined) return creation.status === 'active'
-    ? 'The drill is still active. Its results can still change.' : 'The effect finished.';
+    ? 'The drill is still active. Its results can still change.'
+    : raceReportOutcome(creation) === 'complete' ? 'The effect finished.' : 'The recorded activity ended before the effect completed.';
   if (creation.status === 'ready') return 'Created and waiting for the shared course space. It has not entered the race yet.';
   if (creation.status === 'discarded') return 'Created, but not placed before the attempt ended. It did not affect the race.';
   if (creation.status === 'collectible') return 'Waiting for a racer to collect it. It has not affected the race yet.';
@@ -29,7 +31,7 @@ export function RaceCreationOutcome({creation, racers, report}: {
   const racerName = (id: string) => id === '0' ? 'You' : racers.find(racer => String(racer.id) === id)?.name ?? 'A racer';
   const triggererId = snapshot?.triggererId;
   const status = lifecycleText(creation);
-  const provisional = ['ready', 'collectible', 'active'].includes(creation.status);
+  const provisional = report?.status === 'provisional' || ['ready', 'collectible', 'active'].includes(creation.status);
   const unused = triggererId === undefined;
   const headline = report?.headline ?? (provisional ? 'INSPECTION STILL IN PROGRESS'
     : unused ? 'ZERO INCIDENTS. ZERO PARTICIPANTS.' : 'EQUIPMENT RETURNED WITH NOTES');
@@ -42,6 +44,7 @@ export function RaceCreationOutcome({creation, racers, report}: {
     if (spec.version === 4 && impact.drill) {
       metrics.push({label: 'Drill totals', value: drillMetricSummary(spec.drill.family, impact.drill)});
       if (spec.drill.family === 'stampede' && spec.drill.reaction !== 'steady') metrics.push({label: 'Herd reactions', value: impact.drill.reactions});
+      if (spec.drill.family === 'reconstruction') metrics.push({label: 'Path echoes created', value: impact.drill.reactions});
     } else if (spec.version === 3) {
       if (spec.effect.type === 'repulsionBurst') metrics.push({label: 'Pushes delivered', value: total(impact.impulseCounts)});
       if (spec.effect.type === 'debrisShower') {
@@ -66,7 +69,7 @@ export function RaceCreationOutcome({creation, racers, report}: {
   return <section className="race-creation-outcome" aria-label="Incident report">
     <span className="race-incident-label">INCIDENT REPORT</span>
     <h4 className="race-incident-headline">{headline}</h4>
-    {provisional && <p className="race-incident-status">Provisional — event still open</p>}
+    {provisional && <p className="race-incident-status">Provisional — racers still on course</p>}
     <div className="race-incident-facts">{highlights.map((highlight, index) => <p key={index}>{highlight}</p>)}</div>
     <div className="race-incident-finding"><b>Departmental finding</b><p>{finding}</p>
       {report?.source === 'ai' && <small>AI-written finding</small>}

@@ -111,8 +111,24 @@ export const RaceReportInputSchema = ReportInputObjectSchema.superRefine((input,
 });
 export type RaceReportInput = z.infer<typeof RaceReportInputSchema>;
 
+export const RaceReportInputsSchema = z.array(RaceReportInputSchema).min(1).max(RACE_REPORT_LIMITS.maxReportsPerRun).superRefine((inputs, context) => {
+  const first = inputs[0];
+  if (!first) return;
+  const issue = (message: string, index: number, key: string) => context.addIssue({code: z.ZodIssueCode.custom, message, path: [index, key]});
+  const creationIds = new Set<string>();
+  for (const [index, input] of inputs.entries()) {
+    if (creationIds.has(input.creationId)) issue('Creation IDs must be unique within a run.', index, 'creationId');
+    creationIds.add(input.creationId);
+    if (input.runId !== first.runId) issue('Reports must belong to one run.', index, 'runId');
+    if (input.creatorId !== first.creatorId) issue('A run must retain its creator.', index, 'creatorId');
+    if (input.racers.some(racer => first.racers.find(candidate => candidate.racerId === racer.racerId)?.characterId !== racer.characterId)) {
+      issue('A run must retain its racer lineup.', index, 'racers');
+    }
+  }
+});
+
 export const RaceReportRequestSchema = z.object({
-  input: RaceReportInputSchema, inputFingerprint: fingerprint,
+  inputs: RaceReportInputsSchema, inputFingerprint: fingerprint,
   mode: z.enum(['mock', 'live']), paidAttempt: PipelineRequestSchema.shape.paidAttempt,
 }).strict().superRefine((request, context) => {
   if (request.mode === 'live' && !request.paidAttempt) context.addIssue({code: z.ZodIssueCode.custom, message: 'Live reports require separate consent.', path: ['paidAttempt']});
@@ -122,18 +138,27 @@ export const RaceReportRequestSchema = z.object({
 });
 export type RaceReportRequest = z.infer<typeof RaceReportRequestSchema>;
 
-/** This structural schema also derives the provider's Structured Outputs schema. */
-export const RaceReportContentSchema = z.object({
+export const RaceReportItemContentSchema = z.object({
   headline: z.string().min(1).max(70).regex(/\S/u), finding: z.string().min(1).max(180).regex(/\S/u),
   evidenceIds: z.array(z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/u)).min(1).max(2),
 }).strict();
+export type RaceReportItemContent = z.infer<typeof RaceReportItemContentSchema>;
+export const RaceReportItemSchema = RaceReportItemContentSchema.extend({creationId}).strict();
+export type RaceReportItem = z.infer<typeof RaceReportItemSchema>;
+/** This structural schema also derives the provider's Structured Outputs schema. */
+export const RaceReportContentSchema = z.object({
+  items: z.array(RaceReportItemSchema).min(1).max(RACE_REPORT_LIMITS.maxReportsPerRun),
+}).strict();
 export type RaceReportContent = z.infer<typeof RaceReportContentSchema>;
 export const RaceReportResponseSchema = z.object({
-  runId: z.string().uuid(), creationId, inputFingerprint: fingerprint,
-  attemptId: z.string().uuid().nullable(), report: RaceReportContentSchema,
+  runId: z.string().uuid(), inputFingerprint: fingerprint,
+  attemptId: z.string().uuid().nullable(), items: RaceReportContentSchema.shape.items,
 }).strict().superRefine((response, context) => {
-  if (new Set(response.report.evidenceIds).size !== response.report.evidenceIds.length) context.addIssue({code: z.ZodIssueCode.custom, message: 'Evidence IDs must be unique.', path: ['report', 'evidenceIds']});
-  if (response.report.evidenceIds.some(id => !id.startsWith(response.creationId + ':'))) context.addIssue({code: z.ZodIssueCode.custom, message: 'Evidence belongs to another creation.', path: ['report', 'evidenceIds']});
+  if (new Set(response.items.map(item => item.creationId)).size !== response.items.length) context.addIssue({code: z.ZodIssueCode.custom, message: 'Creation IDs must be unique.', path: ['items']});
+  response.items.forEach((item, index) => {
+    if (new Set(item.evidenceIds).size !== item.evidenceIds.length) context.addIssue({code: z.ZodIssueCode.custom, message: 'Evidence IDs must be unique.', path: ['items', index, 'evidenceIds']});
+    if (item.evidenceIds.some(id => !id.startsWith(item.creationId + ':'))) context.addIssue({code: z.ZodIssueCode.custom, message: 'Evidence belongs to another creation.', path: ['items', index, 'evidenceIds']});
+  });
 });
 export type RaceReportResponse = z.infer<typeof RaceReportResponseSchema>;
 export const RaceReportStatusSchema = z.object({
@@ -250,9 +275,24 @@ export function buildRaceReportEvidence(value: RaceReportInput): readonly RaceRe
 }
 
 /** Reference validation stays separate from the provider's structural output schema. */
-export function validateRaceReportContent(input: RaceReportInput, value: unknown): RaceReportContent {
-  const report = RaceReportContentSchema.parse(value);
-  const ids = new Set(buildRaceReportEvidence(input).map(evidence => evidence.id));
+export function validateRaceReportContent(input: RaceReportInput, value: unknown): RaceReportItemContent;
+export function validateRaceReportContent(inputs: readonly RaceReportInput[], value: unknown): RaceReportContent;
+export function validateRaceReportContent(input: RaceReportInput | readonly RaceReportInput[], value: unknown): RaceReportItemContent | RaceReportContent {
+  if (Array.isArray(input)) {
+    const inputs = RaceReportInputsSchema.parse(input), content = RaceReportContentSchema.parse(value);
+    if (content.items.length !== inputs.length || new Set(content.items.map(item => item.creationId)).size !== inputs.length) {
+      throw new z.ZodError([{code: z.ZodIssueCode.custom, path: ['items'], message: 'Exactly one report is required per creation.'}]);
+    }
+    for (const [index, item] of content.items.entries()) {
+      const creation = inputs.find(candidate => candidate.creationId === item.creationId);
+      if (!creation) throw new z.ZodError([{code: z.ZodIssueCode.custom, path: ['items', index, 'creationId'], message: 'Report belongs to an unknown creation.'}]);
+      const {creationId: _creationId, ...report} = item;
+      validateRaceReportContent(creation, report);
+    }
+    return content;
+  }
+  const report = RaceReportItemContentSchema.parse(value);
+  const ids = new Set(buildRaceReportEvidence(RaceReportInputSchema.parse(input)).map(evidence => evidence.id));
   if (new Set(report.evidenceIds).size !== report.evidenceIds.length || report.evidenceIds.some(id => !ids.has(id))) {
     throw new z.ZodError([{code: z.ZodIssueCode.custom, path: ['evidenceIds'], message: 'Report evidence must uniquely reference this creation.'}]);
   }
@@ -260,7 +300,7 @@ export function validateRaceReportContent(input: RaceReportInput, value: unknown
 }
 
 /** Free, reproducible framing used immediately, in fixtures, and after a failed AI attempt. */
-export function authoredRaceReport(value: RaceReportInput): RaceReportContent {
+export function authoredRaceReport(value: RaceReportInput): RaceReportItemContent {
   const input = RaceReportInputSchema.parse(value), evidence = buildRaceReportEvidence(input);
   const finish = (headline: string, finding: string, selected: readonly RaceReportEvidence[]) =>
     validateRaceReportContent(input, {headline, finding, evidenceIds: selected.slice(0, 2).map(item => item.id)});
@@ -298,16 +338,22 @@ export function authoredRaceReport(value: RaceReportInput): RaceReportContent {
   return finish(headline, finding, first ? [first, ...(second ? [second] : [])] : evidence);
 }
 
+const compareCodePoints = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
+
 function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
-  return '{' + Object.entries(value).filter(([, entry]) => entry !== undefined).sort(([a], [b]) => a.localeCompare(b))
+  return '{' + Object.entries(value).filter(([, entry]) => entry !== undefined).sort(([a], [b]) => compareCodePoints(a, b))
     .map(([key, entry]) => JSON.stringify(key) + ':' + canonicalJson(entry)).join(',') + '}';
 }
 /** Canonical identity is independent of key/lineup ordering, never an authenticity claim. */
-export async function raceReportInputFingerprint(value: RaceReportInput): Promise<string> {
-  const input = RaceReportInputSchema.parse(value);
-  input.racers.sort((a, b) => a.racerId.localeCompare(b.racerId));
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalJson(input)));
+export function canonicalRaceReportInputs(value: RaceReportInput | readonly RaceReportInput[]): string {
+  const inputs = RaceReportInputsSchema.parse(Array.isArray(value) ? value : [value]);
+  inputs.sort((a, b) => compareCodePoints(a.creationId, b.creationId));
+  for (const input of inputs) input.racers.sort((a, b) => compareCodePoints(a.racerId, b.racerId));
+  return canonicalJson(inputs);
+}
+export async function raceReportInputFingerprint(value: RaceReportInput | readonly RaceReportInput[]): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalRaceReportInputs(value)));
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }

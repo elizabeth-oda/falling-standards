@@ -11,7 +11,7 @@ export function registerRaceReportRoutes(app:FastifyInstance,reports:RaceReportS
   app.post('/api/race-reports',{bodyLimit:4096},async(request,reply)=>{
     reply.header('Cache-Control','no-store');
     const parsed=RaceReportRequestSchema.safeParse(request.body);
-    if(!parsed.success)return reply.code(400).send({error:{code:'INVALID_REQUEST',message:'Provide a valid completed-event report request.'}});
+    if(!parsed.success)return reply.code(400).send({error:{code:'INVALID_REQUEST',message:'Provide a valid finalized race report request.'}});
     if(parsed.data.mode==='live'&&!allowedOrigin(request.headers.origin))
       return reply.code(403).send({error:{code:'INVALID_REQUEST',message:'Paid requests must originate from the configured game site.'}});
     const controller=new AbortController();

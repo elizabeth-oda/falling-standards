@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { safetyDrillFixtures, type VoiceRequest } from '@sky/shared';
 import { RaceEventHost } from '../game/race-event-host';
 import { RACE_VOICE_ATTEMPTS } from '../game/race-event-config';
-import { RaceReportSettings, type RaceReportSettingsProps } from '../game/RaceReportSettings';
 import type { PracticeRace } from '../game/practice-race';
 import { loadPipelineProfiles } from '../generation/pipeline-client';
 import { MicrophoneRecorder } from './recorder';
@@ -60,7 +59,7 @@ export function useRaceVoice(race:PracticeRace) {
 }
 export type RaceVoiceController = ReturnType<typeof useRaceVoice>;
 
-export function RaceVoiceControls({voice,paused,...reportSettings}:RaceReportSettingsProps & {voice:RaceVoiceController;paused:boolean}) {
+export function RaceVoiceControls({voice,paused}:{voice:RaceVoiceController;paused:boolean}) {
   const configuring=paused&&voice.enabled&&voice.host.race.elapsed===0;
   const active=['preparing','recording','transcribing','generating','ready'].includes(voice.state.phase);
   const canHold=!paused&&(['recording','preparing'].includes(voice.state.phase)||
@@ -79,7 +78,6 @@ export function RaceVoiceControls({voice,paused,...reportSettings}:RaceReportSet
       <p>This attempt uses “{voice.mockText}”, regardless of what you say. No AI calls.</p>
       <p>{voice.profiles?.liveUsage.enabled?'For real speech, select a live Voice profile before starting the race.':'Live speech is unavailable. Choose Mock mode or play without voice.'}{!configuring?' Restart the race to change its profile.':''}</p>
     </div>}
-    <RaceReportSettings {...reportSettings} disabled={!configuring}/>
     {voice.profiles&&<p>{voice.profiles.liveUsage.attemptsRemaining} / {voice.profiles.liveUsage.maxAttempts} paid attempts remaining.</p>}
     {voice.error&&<p role="alert">{voice.error}</p>}
     {voice.profile?.unavailableReason&&<p>{voice.profile.unavailableReason}</p>}
@@ -108,7 +106,7 @@ export function RaceMicrophoneSetup({voice}: {voice: RaceVoiceController}) {
 }
 
 /** Player-facing setup; model configuration and diagnostics stay in RaceVoiceControls. */
-export function RaceVoiceSetup({voice, ...reportSettings}: RaceReportSettingsProps & {voice: RaceVoiceController}) {
+export function RaceVoiceSetup({voice}: {voice: RaceVoiceController}) {
   const {microphone} = voice;
   const liveProfile = voice.profiles?.profiles.find(profile => profile.mode === 'live' && profile.available);
   const liveEnabled = Boolean(liveProfile && voice.profiles?.transcription?.available && voice.profiles.liveUsage.enabled);
@@ -154,7 +152,6 @@ export function RaceVoiceSetup({voice, ...reportSettings}: RaceReportSettingsPro
         <RaceMicrophoneSetup voice={voice}/>
       </section>
     </div>
-    <RaceReportSettings {...reportSettings} disabled={preparing}/>
     {needsRefresh && <div className="race-voice-error">
       {availabilityError && <p role="alert">{availabilityError}</p>}
       <button disabled={preparing} onClick={voice.refresh}>Refresh availability</button>
