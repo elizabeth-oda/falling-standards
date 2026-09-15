@@ -1,5 +1,5 @@
 import { RaceAlert } from './RaceAlerts';
-import { encounterKind, encounterLabel, type EventVector, type RaceEventSnapshot } from '@sky/shared';
+import { encounterKind, type EventVector, type RaceEventSnapshot } from '@sky/shared';
 import type { ReactNode } from 'react';
 import { effectFeedback } from './effect-feedback';
 
@@ -20,18 +20,25 @@ const symbols:Record<ReturnType<typeof encounterKind>,ReactNode>={
 export function EffectCue({event,position,steeringKeys}:{event:RaceEventSnapshot;position:EventVector;steeringKeys:string}) {
   const feedback=effectFeedback(event,position);
   if(!feedback||!event.instance)return null;
-  const {tone,title,detail,meter,controls}=feedback,kind=encounterKind(event.instance.spec);
-  return <RaceAlert><div className={'effect-cue '+kind+' '+tone}>
-    <div className="effect-cue-label"><span>{encounterLabel(event.instance.spec)}</span><span>{event.remainingSeconds.toFixed(1)} s</span></div>
-    <div className="effect-cue-heading" role="status" aria-atomic="true">
+  const {tone,title,detail,status,meter,controls}=feedback,kind=encounterKind(event.instance.spec);
+  const action=controls?.action==='release-steering'?'Release ':'Steer ';
+  return <RaceAlert><div className={'effect-cue '+kind}>
+    <div className="effect-cue-heading">
       <svg viewBox="0 0 40 28" aria-hidden="true">{symbols[kind]}</svg>
-      <strong>{title}</strong>
+      <strong role="status" aria-atomic="true">{title}</strong>
+      <span className="effect-cue-time" role="timer" aria-label="Time remaining">{Math.ceil(event.remainingSeconds)} s</span>
     </div>
-    <p>{detail}</p>
-    {controls&&<div className="effect-control-hint"><kbd>{controls.action==='release-steering'?'Release ':'Steer '}{steeringKeys}</kbd><span>{controls.detail}</span></div>}
+    <p aria-live={kind==='buddy'?'polite':undefined}>{detail}</p>
+    {controls&&<div className="effect-control-hint">
+      <kbd>{action}{steeringKeys}</kbd>
+      {status&&<span className={'effect-status '+tone} role="status" aria-atomic="true"
+        aria-label={status+'. '+action+steeringKeys}>{status}</span>}
+    </div>}
     {meter&&<div className="effect-meter">
-      <span>{meter.label}</span>
-      <meter aria-label={meter.label} min={0} max={1} value={meter.value}/>
+      <div className="effect-meter-label"><span>{meter.label}</span>{meter.value===null&&<span>Inactive</span>}</div>
+      {meter.value===null
+        ?<span className="effect-meter-inactive" role="img" aria-label={meter.label+': inactive'}/>
+        :<meter aria-label={meter.label} min={0} max={1} value={meter.value}/>}
     </div>}
   </div></RaceAlert>;
 }

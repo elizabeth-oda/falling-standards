@@ -76,7 +76,7 @@ async function setup(profileAvailability: typeof profiles | null = profiles) {
   const requests:Array<Omit<VoiceRequest,'captureMs'>>=[];
   const modules:Record<string,unknown>={
     react:React,'react/jsx-runtime':{},'@sky/shared':{safetyDrillFixtures},
-    '../game/race-event-host':{RaceEventHost},'../game/race-event-config':{RACE_VOICE_ATTEMPTS},'./recorder':{MicrophoneRecorder:Recorder},
+    '../game/RaceReportSettings':{},'../game/race-event-host':{RaceEventHost},'../game/race-event-config':{RACE_VOICE_ATTEMPTS},'./recorder':{MicrophoneRecorder:Recorder},
     '../generation/pipeline-client':{loadPipelineProfiles:async()=>{
       if(!profileAvailability)throw new Error('Profiles unavailable');
       return structuredClone(profileAvailability);

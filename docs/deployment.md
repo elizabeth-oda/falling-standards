@@ -57,7 +57,7 @@ In the project's **Environment Variables** screen, add these for **Production**:
 
 Do not copy the whole local `.env` into Vercel: its local allowance defaults to 3. Optional model and token settings are listed in the root `.env.example`.
 
-The host must identify the deployment as production (`VERCEL_ENV=production`), the enable flag must be true, and the configured origin must match. Preview deployments always remain mock-only. Players select Live AI and deliberately record a request; there is no separate payment opt-in checkbox. The client attaches a fresh attempt ID and compatibility metadata automatically. Adding the key, opening the site, or selecting a mode does not start generation.
+The host must identify the deployment as production (`VERCEL_ENV=production`), the enable flag must be true, and the configured origin must match. Preview deployments always remain mock-only. Players select Live AI and deliberately record a request; voice creation has no separate payment opt-in checkbox. Optional incident reports retain their own feature setting. The client attaches a fresh attempt ID and compatibility metadata automatically. Adding the key, opening the site, or selecting a mode does not start generation.
 
 ### Where the key lives
 

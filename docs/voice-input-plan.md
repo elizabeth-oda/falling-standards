@@ -66,7 +66,7 @@ Skip this section for normal development or mock testing. One server-side key se
    bun run dev:live
    ```
 
-4. In race setup, enable the microphone, select **Live AI**, and choose the **Start with prepared hazard** or **Start with Live AI** button. After collecting a star, deliberately hold Space to record. The run offers at most two paid voice attempts (up to six API calls total). In the lab, choose a live profile and record or submit the prompt. There is no separate payment opt-in checkbox.
+4. In race setup, enable the microphone, select **Live AI**, and choose the **Start with prepared hazard** or **Start with Live AI** button. After collecting a star, deliberately hold Space to record. The run offers at most two paid voice attempts (up to six API calls total). In the lab, choose a live profile and record or submit the prompt. Voice and generation have no separate payment opt-in checkbox; the optional incident-report feature retains its own setting.
 
 `bun run dev`, builds, tests, and the ordinary server start keep paid mode disabled even if a key is present. Starting `dev:live` exposes the paid option; it does not itself make a provider call. Refreshing profiles reports local configuration, not whether the provider accepts your key or model.
 

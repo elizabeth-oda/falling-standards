@@ -92,9 +92,9 @@ Use the schema for the feature you are changing; do not cast a v3/v4 encounter i
 
 A key belongs in the ignored `apps/server/.env` locally or a Vercel Secret when hosted. Only server code uses it. The browser receives profiles, progress, validated results, and safe errors. Key presence alone does not enable paid calls.
 
-The application allows up to 8 seconds of recording, a separate 10 seconds for upload/transcription, then 30 seconds for generation. Design uses at most 8 seconds of that generation window; geometry gets the time left. A live voice attempt can make up to three API calls under one attempt ID and allowance entry. Clients add validated compatibility metadata automatically on deliberate submission in Live mode; there is no payment opt-in checkbox.
+The application allows up to 8 seconds of recording, a separate 10 seconds for upload/transcription, then 30 seconds for generation. Design uses at most 8 seconds of that generation window; geometry gets the time left. A live voice attempt can make up to three API calls under one attempt ID and allowance entry. Voice and generation clients add validated compatibility metadata automatically on deliberate submission in Live mode; these flows have no separate payment opt-in checkbox. Optional incident reports retain their own feature setting.
 
-Pause, restart, finish, and navigation cancel pending race requests, discard saved voice grants and waiting results, and reject stale results. A pause preserves an uncollected future star. Audio is kept in memory for the request. Lab comparison history and the race's last-result replay are also in memory; neither stores audio.
+Pause, restart, finish, and navigation cancel pending race voice requests, discard saved voice grants and waiting results, and reject stale results. A pause preserves an uncollected future star. Audio is kept in memory for the request. Lab comparison history and the race's last-result replay are also in memory; neither stores audio.
 
 Local live mode defaults to three attempts per server start. Hosted mode defaults to 500 per instance. These are temporary counters, not a durable or global spending cap. Read [voice setup](voice-input-plan.md#enable-live-ai-locally) or [deployment](deployment.md) before deliberately enabling paid calls.
 
