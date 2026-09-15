@@ -57,7 +57,7 @@ export function registerVoiceRoutes(app:FastifyInstance,pipeline:CreationPipelin
           if (!profile) throw new PipelineFailure('INVALID_REQUEST','Unknown pipeline profile.');
           if (profile.mode==='live' && !allowedOrigin(request.headers.origin)) return reply.code(403).send({error:{code:'INVALID_REQUEST',message:'Paid requests must originate from the configured game site.'}});
           if (profile.mode==='live' && !pipeline.liveEnabled) throw new PipelineFailure('LIVE_DISABLED','Paid generation is disabled. Start bun run dev:live to opt in.');
-          if (profile.mode==='live' && !options.paidAttempt) throw new PipelineFailure('CONSENT_REQUIRED','Allow this paid attempt before submitting speech.');
+          if (profile.mode==='live' && !options.paidAttempt) throw new PipelineFailure('CONSENT_REQUIRED','Paid attempt metadata is required before submitting speech.');
           if (transcribeOnly) {
             const {result}=await pipeline.runVoice(audio,options,{signal:controller.signal,transcribeOnly:true,transcriptionBudgetMs});
             return reply.header('Cache-Control','no-store').send(result);

@@ -24,7 +24,7 @@ test('hosted builds stay mock-only without explicit production enablement; healt
         assert.equal((await app.inject('/api/health')).json().mode,'mock');
         const profiles=PipelineProfilesSchema.parse((await app.inject('/api/lab/profiles')).json());
         assert.equal(profiles.liveUsage.enabled,false);
-        assert.equal(profiles.liveUsage.maxAttempts,100);
+        assert.equal(profiles.liveUsage.maxAttempts,500);
         assert.ok(profiles.profiles.filter(p=>p.mode==='live').every(p=>!p.available));
         const mock=await app.inject({method:'POST',url:'/api/lab/events',payload:{...input(),text:'hungry purple planet',profileId:'mock'}});
         assert.equal(JSON.parse(mock.body.trim().split('\n').at(-1)!).type,'complete');
@@ -62,7 +62,7 @@ test('hosted typed and voice requests reject missing/foreign origins without pro
     }
     const profilesResponse=await app.inject('/api/lab/profiles');
     const profiles=PipelineProfilesSchema.parse(profilesResponse.json());
-    assert.deepEqual(profiles.liveUsage,{enabled:true,maxAttempts:100,attemptsUsed:0,attemptsRemaining:100,busy:false});
+    assert.deepEqual(profiles.liveUsage,{enabled:true,maxAttempts:500,attemptsUsed:0,attemptsRemaining:500,busy:false});
     assert.equal(profiles.transcription?.available,true);
     assert.ok(!profilesResponse.body.includes(env.OPENAI_API_KEY));
     assert.equal(calls,0);

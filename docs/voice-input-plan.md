@@ -10,7 +10,7 @@ Use this guide to try the microphone in the game or Generation lab. For the code
 | --- | --- | --- |
 | Play without voice | A race with ordinary items and the selected prepared safety drill waiting ahead for any racer to activate. Both yellow voice stars are removed. | A supported desktop browser and keyboard. No microphone or AI calls. |
 | Mock | The microphone records, but a selected prepared transcript determines the creation. Your spoken words are not recognized. | Microphone permission and the local mock API. No key or paid calls. |
-| Live AI | The recording is transcribed, then its words drive the design and geometry stages. | A configured live server, microphone permission, and explicit paid consent. |
+| Live AI | The recording is transcribed, then its words drive the design and geometry stages. | A configured live server, microphone permission, and a deliberately recorded request. |
 
 Desktop Chrome and Edge are the initial target. Use localhost or HTTPS for microphone access. Spoken prompts are English-first and must contain one to ten whitespace-separated words, at most 200 characters.
 
@@ -25,9 +25,9 @@ Run `bun install --frozen-lockfile` and `bun run dev` from the repository root, 
 5. After collecting it, hold Space, speak, and release. The HUD shows the simulated transcript and creation progress.
 6. Keep racing and follow the radar to the generated object. It appears later in the course, not immediately beside you. Fly through its glowing halo; the first racer to reach it activates the effect.
 
-To play without a microphone, select a prepared prompt and choose **Play without voice** instead of enabling the microphone. The setup names the selected drill beside that button, even if Live AI is selected. The drill uses normal course placement and shared activation, with no recording, transcription, generation, or paid consent. Follow its radar and glowing halo; ordinary items remain available.
+To play without a microphone, select a prepared prompt and choose **Play without voice** instead of enabling the microphone. The setup names the selected drill beside that button, even if Live AI is selected. The drill uses normal course placement and shared activation, with no recording, transcription, generation, or payment opt-in. Follow its radar and glowing halo; ordinary items remain available.
 
-You have 10 gameplay seconds after a collected grant becomes available to start speaking. Recording auto-submits after 8 seconds. Each normal voice-enabled run offers two stars if you reach their locations, with one fresh attempt per star; failure, cancellation, or missing a star consumes that opportunity. Restart returns to setup and clears consent. **Play without voice** skips all microphone setup and includes one prepared safety drill.
+You have 10 gameplay seconds after a collected grant becomes available to start speaking. Recording auto-submits after 8 seconds. Each normal voice-enabled run offers two stars if you reach their locations, with one fresh attempt per star; failure, cancellation, or missing a star consumes that opportunity. Restart returns to setup and resets the two-attempt run counter. **Play without voice** skips all microphone setup and includes one prepared safety drill.
 
 The second yellow star has a fixed depth chosen randomly between 60% and 70% of the course at the start of each run. It appears with at least 120 m of approach, or four seconds at your current fall speed when that needs more distance. At reveal it aligns with your current horizontal position, then stays fixed. The HUD announces its arrival. The first star's outcome, a waiting generated object, an active effect, and rival progress never suppress this offer. Rivals can activate generated objects, but cannot collect your yellow voice stars.
 
@@ -66,7 +66,7 @@ Skip this section for normal development or mock testing. One server-side key se
    bun run dev:live
    ```
 
-4. In race setup, enable the microphone, select **Live AI**, and allow up to two paid voice attempts for the run (up to six API calls total) before choosing **Start with voice**. In the lab, choose a live profile and confirm that specific paid attempt before recording or generating.
+4. In race setup, enable the microphone, select **Live AI**, and choose **Start with voice**. After collecting a star, deliberately hold Space to record. The run offers at most two paid voice attempts (up to six API calls total). In the lab, choose a live profile and record or submit the prompt. There is no separate payment opt-in checkbox.
 
 `bun run dev`, builds, tests, and the ordinary server start keep paid mode disabled even if a key is present. Starting `dev:live` exposes the paid option; it does not itself make a provider call. Refreshing profiles reports local configuration, not whether the provider accepts your key or model.
 
@@ -80,9 +80,9 @@ Live development binds to localhost and does not restart the backend on file cha
 | Transcription only | 1: speech |
 | Spoken creation | 3: speech, design, and geometry |
 
-Local live mode defaults to **3 dispatched attempts per server start**, shared across the race, lab, profiles, and browser tabs. `LIVE_MAX_ATTEMPTS` accepts 1-100. Only one paid attempt runs at a time per server instance, and repeat attempt IDs are rejected. Restarting resets the count. Failed or cancelled dispatched work consumes the allowance and may still incur charges; there are no automatic retries.
+Local live mode defaults to **3 dispatched attempts per server start**, shared across the race, lab, profiles, and browser tabs. `LIVE_MAX_ATTEMPTS` accepts 1-500. Only one paid attempt runs at a time per server instance, and repeat attempt IDs are rejected. Restarting resets the count. Failed or cancelled dispatched work consumes the allowance and may still incur charges; there are no automatic retries.
 
-In the main race, consent authorizes up to two fresh attempts. Each started attempt consumes one authorization and uses its own UUID; collecting a star never dispatches automatically. Reset and relevant configuration changes clear consent. The lab still confirms each attempt separately. Server allowance is checked independently and may run out before the second race attempt. Invalid metadata and missing consent are rejected before dispatch. If a paid transcription returns empty or overlong text, the attempt is consumed and generation does not start.
+In the main race, each run permits up to two fresh voice attempts. Each deliberately started live attempt consumes one run opportunity and receives its own UUID; collecting a star, selecting Live AI, and enabling the microphone never dispatch automatically. Reset starts a fresh run counter; changing profiles or prompts does not replenish used opportunities. Lab submissions also create a fresh attempt ID automatically. Server allowance is checked independently and may run out before the second race attempt. Missing or invalid request metadata is rejected before dispatch. If a paid transcription returns empty or overlong text, the attempt is consumed and generation does not start.
 
 The configured transcription model comes from `TRANSCRIPTION_MODEL` in the server environment; its default is `gpt-transcribe`. Generation profiles and output limits are documented in [the lab guide](prompt-to-mesh-pipeline.md#models-and-budgets).
 
@@ -134,7 +134,7 @@ All three voice POST routes accept multipart form data with exactly two parts:
 
 `captureMs` is finite in [0, 8000] and reports browser capture time; it is not server-verified duration. `geometryMode` is `primitives` or `mesh`; omission retains the raw-mesh default. `mockText` is ignored by live transcription. The low-level mock speech provider defaults to `giant rubber duck` when omitted; event clients must supply a supported event prompt, as the game's UI does.
 
-Live options also require `paidAttempt: {id: <new UUID>, confirmed: true}`. No keys or model overrides belong in request metadata. Text is validated rather than silently shortened.
+Live options retain `paidAttempt: {id: <new UUID>, confirmed: true}` for API compatibility. Clients create it automatically on deliberate submission; `confirmed` no longer corresponds to a payment checkbox. No keys or model overrides belong in request metadata. Text is validated rather than silently shortened.
 
 | Route | Result |
 | --- | --- |
@@ -145,14 +145,14 @@ Live options also require `paidAttempt: {id: <new UUID>, confirmed: true}`. No k
 
 Both generation streams report `transcribing`, `transcript`, nested `generation` progress, then an outer `complete` or `failed`. The outer terminal event decides success; HTTP 200 alone does not. A completed result includes the validated spec, transcript metric, and elapsed time. The browser validates every event and final spec.
 
-Pre-stream failures return `{error:{code,message,provider?}}` with safe allowlisted diagnostics. Statuses are 400 for invalid input/consent, 403 for disabled mode or foreign origin, 409 for busy/repeated attempts, 429 for exhausted allowance, 503 for missing configuration, and 502 for other provider/deadline failures. Raw provider errors are never forwarded.
+Pre-stream failures return `{error:{code,message,provider?}}` with safe allowlisted diagnostics. Statuses are 400 for invalid input or attempt metadata, 403 for disabled mode or foreign origin, 409 for busy/repeated attempts, 429 for exhausted allowance, 503 for missing configuration, and 502 for other provider/deadline failures. Raw provider errors are never forwarded.
 
 The upload deadline starts on handler entry. A stalled upload closes without dispatching transcription. Client deadlines are 15 seconds for transcription-only and 45 seconds for the combined workflow, including delivery grace; capture precedes these request budgets.
 
 | Responsibility | Location |
 | --- | --- |
 | Recording, permission, meter, cleanup | `apps/web/src/voice/recorder.ts`, `RecorderControls.tsx` |
-| Race setup and consent | `apps/web/src/voice/RaceVoiceControls.tsx` |
+| Race setup and attempt admission | `apps/web/src/voice/RaceVoiceControls.tsx` |
 | Main-race audio adapter | `apps/web/src/voice/race-event-voice-client.ts` |
 | v3 text/audio streaming client | `apps/web/src/race-events/client.ts` |
 | v2 and transcription-only client | `apps/web/src/voice/voice-client.ts` |
@@ -165,6 +165,6 @@ The recorder captures audio; transcription returns words; generation returns val
 
 ## Verify a change
 
-Run [the contributor checks](../CONTRIBUTING.md#check-your-work), then try the mock game flow above in Chrome or Edge. Tests use fake media devices, canned uploads, and intercepted provider responses. They cover recording cleanup, consent, deadlines, invalid input, and stale results without real credentials. Second-star checks advance the actual 120 Hz race through first-star travel, recording, and response delay; they cover success, failure, timeout, missed pickups, uncollected objects, active effects, boosts, saved grants, and cancellation. In Chrome or Edge, verify a successful first mock encounter followed by the second star, plus pause/reset during pending voice work.
+Run [the contributor checks](../CONTRIBUTING.md#check-your-work), then try the mock game flow above in Chrome or Edge. Tests use fake media devices, canned uploads, and intercepted provider responses. They cover recording cleanup, attempt admission, deadlines, invalid input, and stale results without real credentials. Second-star checks advance the actual 120 Hz race through first-star travel, recording, and response delay; they cover success, failure, timeout, missed pickups, uncollected objects, active effects, boosts, saved grants, and cancellation. In Chrome or Edge, verify a successful first mock encounter followed by the second star, plus pause/reset during pending voice work.
 
 A real microphone/live quality test is a separate deliberate action. Record the browser, selected profile, recognized text, timings, and outcome; never include audio or keys in a report.

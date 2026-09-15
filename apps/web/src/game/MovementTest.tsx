@@ -17,7 +17,7 @@ import { PracticeRace } from './practice-race';
 import { ITEM_NAMES } from './race-course';
 import { RaceScene, defaultBindings, initialRaceHud, type RaceRuntime } from './RaceScene';
 import { RaceOverlay } from './RaceOverlay';
-import { RaceBriefing, RaceSetup } from './RaceSetup';
+import { RaceBriefing, RaceSetup, type RaceSetupStep } from './RaceSetup';
 import { BRAKE_SPEED } from './freefall-controller';
 import './movement-test.css';
 import './race-hud.css';
@@ -39,6 +39,7 @@ export function MovementTest() {
   const employee=String(CHARACTERS.indexOf(person)+1).padStart(3,'0');
   const [countdown,setCountdown]=useState(3);
   const [settings,setSettings]=useState(false);
+  const [setupStep,setSetupStep]=useState<RaceSetupStep>('briefing');
   const screenRef=useRef(screen);screenRef.current=screen;
   const settingsRef=useRef(settings);settingsRef.current=settings;
   const [angle,setAngle]=useState(DEFAULT_CHARACTER_ANGLE),[zoom,setZoom]=useState(8);
@@ -86,7 +87,7 @@ export function MovementTest() {
     // Starting a prepared run must keep its loaded fixture and voice setup.
     setSettings(false);setBinding(null);setCountdown(3);setScreen('countdown');
   },[runtime,inspected]);
-  const prepareRun=()=>{reset();setSettings(false);setBinding(null);setScreen('setup');};
+  const prepareRun=()=>{reset();setSetupStep('briefing');setSettings(false);setBinding(null);setScreen('setup');};
   const startPreparedRun=(withVoice:boolean)=>{
     if(screenRef.current!=='setup'||runtime.race.elapsed!==0)return false;
     if(withVoice&&!voice.getReadiness().ready)return false;
@@ -214,7 +215,8 @@ export function MovementTest() {
           <button className="begin-exercise" onClick={prepareRun}>{'Begin as '+person.name+' →'}</button>
           <small>Attendance is not optional.</small>
         </div>}
-        {screen==='setup'&&!settings&&<RaceSetup voice={voice} steeringHelp={steeringHelp} actionHelp={actionHelp}
+        {screen==='setup'&&!settings&&<RaceSetup voice={voice} step={setupStep} onStepChange={setSetupStep} steeringHelp={steeringHelp} actionHelp={actionHelp}
+          controls={{steering:[bindings.forward,bindings.left,bindings.backward,bindings.right].map(label),boost:label(bindings.boost),use:label(bindings.use)}}
           onStart={()=>startPreparedRun(true)} onSkipVoice={()=>startPreparedRun(false)} onBack={returnToPersonnel}/>}
         {screen==='countdown'&&<div className="exercise-start-screen" role="status" aria-live="polite" aria-atomic="true">
           <span className="safety-caution">⚠ STAND BY</span>

@@ -53,6 +53,8 @@ The generated object and the Voice Power Up are different things. The star grant
 
 Web paths abbreviated as `game/...` or `voice/...` are under `apps/web/src`.
 
+Pre-race setup opens with a short guided briefing: the current steering, boost, and item bindings are shown as large keycaps, with braking and the remaining bindings under **All controls**. Players can start immediately without voice, using the selected prepared drill, or open a separate hazard-reporting step for mode and microphone setup. The entire setup reflows and scrolls as one surface on smaller displays; returning from hazard setup releases the microphone.
+
 `MovementTest` is a historical name for the current main game. `CreationDemoPage`, `DemoGame`, `PlayerController`, and the v2 `RaceCreationHost` remain as older integration/regression code; they are not the page mounted by `GamePage`.
 
 ## Movement, appearance, and effects
@@ -90,11 +92,11 @@ Use the schema for the feature you are changing; do not cast a v3/v4 encounter i
 
 A key belongs in the ignored `apps/server/.env` locally or a Vercel Secret when hosted. Only server code uses it. The browser receives profiles, progress, validated results, and safe errors. Key presence alone does not enable paid calls.
 
-The application allows up to 8 seconds of recording, a separate 10 seconds for upload/transcription, then 30 seconds for generation. Design uses at most 8 seconds of that generation window; geometry gets the time left. A live voice attempt can make up to three API calls under one consent and allowance entry.
+The application allows up to 8 seconds of recording, a separate 10 seconds for upload/transcription, then 30 seconds for generation. Design uses at most 8 seconds of that generation window; geometry gets the time left. A live voice attempt can make up to three API calls under one attempt ID and allowance entry. Clients add validated compatibility metadata automatically on deliberate submission in Live mode; there is no payment opt-in checkbox.
 
 Pause, restart, finish, and navigation cancel pending race requests, discard saved voice grants and waiting results, and reject stale results. A pause preserves an uncollected future star. Audio is kept in memory for the request. Lab comparison history and the race's last-result replay are also in memory; neither stores audio.
 
-Local live mode defaults to three attempts per server start. Hosted mode defaults to 100 per instance. These are temporary counters, not a durable or global spending cap. Read [voice setup](voice-input-plan.md#enable-live-ai-locally) or [deployment](deployment.md) before deliberately enabling paid calls.
+Local live mode defaults to three attempts per server start. Hosted mode defaults to 500 per instance. These are temporary counters, not a durable or global spending cap. Read [voice setup](voice-input-plan.md#enable-live-ai-locally) or [deployment](deployment.md) before deliberately enabling paid calls.
 
 ## Read next
 

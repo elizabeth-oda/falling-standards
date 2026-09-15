@@ -24,9 +24,9 @@ The final procedural visual is baked into one render mesh. Its short appearance 
 
 Follow [the local live AI setup](voice-input-plan.md#enable-live-ai-locally) to save a server-side key and start `bun run dev:live`. The local allowance defaults to three dispatched attempts per server start; key presence alone does not enable spending.
 
-In **Asset generation**, select a live profile and visual method, then enter a short prompt. Check **Allow this paid attempt** and click **Generate · up to 2 paid calls**. Consent resets after submission and when you change the prompt, method, or profile. Every comparison is a separate deliberate attempt; there is no automatic paid batch, retry, or repair call.
+In **Asset generation**, select a live profile and visual method, then enter a short prompt. Click **Generate · up to 2 paid calls**. The selected live profile and deliberate submission create fresh attempt metadata automatically; there is no separate payment opt-in checkbox. Every comparison is a separate deliberate attempt; there is no automatic paid batch, retry, or repair call.
 
-Adding a key, refreshing profiles, loading a fixture, and editing prompts make no provider calls. Availability reports configuration only, not verified model/account access. Legacy raw-spec endpoints stay mocked. For hosted game settings and the separate 100-attempt per-instance default, use [the deployment guide](deployment.md).
+Adding a key, refreshing profiles, loading a fixture, and editing prompts make no provider calls. Availability reports configuration only, not verified model/account access. Legacy raw-spec endpoints stay mocked. For hosted game settings and the separate 500-attempt per-instance default, use [the deployment guide](deployment.md).
 
 ## Run a comparison
 
@@ -55,7 +55,7 @@ Server profiles in `apps/server/src/generation/pipeline-config.ts`:
 
 | Variable | Default |
 | --- | --- |
-| LIVE_MAX_ATTEMPTS | 3 (integer 1–100) |
+| LIVE_MAX_ATTEMPTS | 3 (integer 1–500) |
 | DESIGN_MODEL | gpt-5.6-sol |
 | DESIGN_REASONING | low |
 | DESIGN_MAX_OUTPUT_TOKENS | 2048 |
@@ -121,7 +121,7 @@ The existing model wire format is vertices `{x,y,z}` and faces `{a,b,c,color}`. 
 
 `paidAttempt` is required for live profiles only. Use a fresh UUID for each deliberate submission. A dispatched UUID cannot be reused, even after failure/cancellation. This is an accidental-spend control, not user authentication.
 
-Invalid input, profile or missing consent returns HTTP 400 with `{error:{code,message}}`; disabled paid mode or a foreign browser origin returns 403; a live-enabled but unconfigured profile returns 503. Accepted attempts stream application/x-ndjson:
+Invalid input, profile or missing/invalid paid-attempt metadata returns HTTP 400 with `{error:{code,message}}`; disabled paid mode or a foreign browser origin returns 403; a live-enabled but unconfigured profile returns 503. Accepted attempts stream application/x-ndjson:
 
 ```text
 stage(design)
@@ -146,7 +146,7 @@ For the next deliberate comparison, try **Procedural parts** with **Sol direct �
 
 Sol supports `reasoning.effort: none`; Astra's lowest supported setting is `low`. Configuration rejects Astra + none before an API call. See [Sol settings](https://developers.openai.com/api/docs/models/gpt-5.6-sol) and [Astra settings](https://developers.openai.com/api/docs/models/gpt-6-astra). Smaller outputs are another possible improvement; increasing the output-token cap does not make an existing request faster. See [latency guidance](https://developers.openai.com/api/docs/guides/latency-optimization).
 
-Use **Use transcript as typed input** to compare generation with the already-recognized words, saving another transcription call. A new typed attempt still needs its own explicit paid consent. Restart `bun run dev:live` deliberately to load the new backend profile, then Refresh profiles. Restarting resets the in-memory allowance.
+Use **Use transcript as typed input** to compare generation with the already-recognized words, saving another transcription call. A new typed submission uses its own fresh attempt ID and the selected profile. Restart `bun run dev:live` deliberately to load the new backend profile, then Refresh profiles. Restarting resets the in-memory allowance.
 
 ## Diagnosing a live failure
 
@@ -185,7 +185,7 @@ The older `CreationDemoPage` remains simulated regression code and is not mounte
 - web `generation/compile-primitives.ts`: bounded single-mesh compilation.
 - web `pages/GenerationLabPage.tsx`, `generation/LabPreview.tsx`, `LabHistory.tsx`: testing UI.
 
-Run `bun run build`, `bun run typecheck`, and `bun run test`. Automated tests use fixtures and intercepted SDK responses, never paid calls. Coverage includes recipe bounds, one-effect output, handoff isolation, raw API compatibility, cancellation/deadlines, compiler transforms and budgets, comparison accounting, existing game/race tests, paid-mode gates, consent, duplicate submissions, shared concurrency/allowance, and secret-free status/errors.
+Run `bun run build`, `bun run typecheck`, and `bun run test`. Automated tests use fixtures and intercepted SDK responses, never paid calls. Coverage includes recipe bounds, one-effect output, handoff isolation, raw API compatibility, cancellation/deadlines, compiler transforms and budgets, comparison accounting, existing game/race tests, paid-mode gates, attempt metadata, duplicate submissions, shared concurrency/allowance, and secret-free status/errors.
 
 References: [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs), [latency guidance](https://developers.openai.com/api/docs/guides/latency-optimization), [Astra](https://developers.openai.com/api/docs/models/gpt-6-astra).
 

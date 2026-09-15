@@ -14,13 +14,8 @@ export function useRaceVoice(race:PracticeRace) {
   const [recorder]=useState(()=>new MicrophoneRecorder(undefined,undefined,undefined,{retainPreparedStream:true}));
   const [profileId,setSelectedProfileId]=useState('mock'),[mockText,setSelectedMockText]=useState(safetyDrillFixtures[0].prompt);
   const [enabled,setEnabled]=useState(true);
-  const [paidAttemptsRemaining,setPaidAttemptsRemaining]=useState(0),[refresh,setRefresh]=useState(0);
-  const paidRemaining=useRef(0);
-  const armed=paidAttemptsRemaining>0;
-  const setArmed=(confirmed:boolean)=>{
-    paidRemaining.current=confirmed?RACE_VOICE_ATTEMPTS:0;
-    setPaidAttemptsRemaining(paidRemaining.current);
-  };
+  const [paidAttemptsRemaining,setPaidAttemptsRemaining]=useState(RACE_VOICE_ATTEMPTS),[refresh,setRefresh]=useState(0);
+  const paidRemaining=useRef(RACE_VOICE_ATTEMPTS);
   const [profiles,setProfiles]=useState<Awaited<ReturnType<typeof loadPipelineProfiles>>>();
   const [error,setError]=useState('');
   const attempt=useRef<Configuration>({profileId:'mock',geometryMode:'primitives',mockText});
@@ -32,12 +27,14 @@ export function useRaceVoice(race:PracticeRace) {
   const live=profile?.mode==='live';
   const paidAvailable=paidVoiceAvailable(profiles);
   const getReadiness=()=>{
-    const readiness=raceVoiceReadiness({enabled,microphone:recorder.getSnapshot(),profiles,profileId,armed:paidRemaining.current>0,error});
+    const readiness=raceVoiceReadiness({enabled,microphone:recorder.getSnapshot(),profiles,profileId,error});
     const blocked=host.loop.getSnapshot().phase==='prompted'?host.requestBlockedReason():undefined;
-    return blocked?{ready:false,message:blocked}:readiness;
+    if (blocked) return {ready:false,message:blocked};
+    if (readiness.ready && live && paidRemaining.current === 0) return {ready:false,message:'Both voice attempts have been used for this run.'};
+    return readiness;
   };
-  const setProfileId=(id:string)=>{setArmed(false);setSelectedProfileId(id);};
-  const setMockText=(text:string)=>{setArmed(false);setSelectedMockText(text);};
+  const setProfileId=(id:string)=>{setSelectedProfileId(id);};
+  const setMockText=(text:string)=>{setSelectedMockText(text);};
   useEffect(()=>{
     const controller=new AbortController();
     void loadPipelineProfiles(controller.signal).then(data=>{if(!controller.signal.aborted){setProfiles(data);setError('');}})
@@ -52,12 +49,12 @@ export function useRaceVoice(race:PracticeRace) {
     if(live){paidRemaining.current--;setPaidAttemptsRemaining(paidRemaining.current);}
     host.loop.startRecording();
   };
-  const reset=()=>{setEnabled(true);setArmed(false);attempt.current={profileId:'mock',geometryMode:'primitives',mockText};host.reset();};
+  const reset=()=>{setEnabled(true);paidRemaining.current=RACE_VOICE_ATTEMPTS;setPaidAttemptsRemaining(RACE_VOICE_ATTEMPTS);attempt.current={profileId:'mock',geometryMode:'primitives',mockText};host.reset();};
   const skipForRun=()=>{
     const prepared=safetyDrillFixtures.find(fixture=>fixture.prompt===mockText)??safetyDrillFixtures[0];
-    host.loadPreparedDrill(prepared.spec);setEnabled(false);setArmed(false);
+    host.loadPreparedDrill(prepared.spec);setEnabled(false);paidRemaining.current=0;setPaidAttemptsRemaining(0);
   };
-  return {host,recorder,microphone,enabled,getReadiness,skipForRun,profileId,setProfileId,mockText,setMockText,armed,setArmed,paidAttemptsRemaining,profiles,error,profile,live,paidAvailable,state,opportunity,
+  return {host,recorder,microphone,enabled,getReadiness,skipForRun,profileId,setProfileId,mockText,setMockText,paidAttemptsRemaining,profiles,error,profile,live,paidAvailable,state,opportunity,
     start,finish:()=>{void host.loop.finishRecording();},cancel:()=>host.loop.cancelRecording(),reset,refresh:()=>setRefresh(value=>value+1)};
 }
 export type RaceVoiceController = ReturnType<typeof useRaceVoice>;
@@ -79,9 +76,8 @@ export function RaceVoiceControls({voice,paused}:{voice:RaceVoiceController;paus
     {voice.live?<p>Live: speech → design → geometry. Up to 2 voice attempts / 6 paid API calls per run.</p>:<div className="voice-mode-notice" role="note">
       <strong>Mock mode · speech recognition is off</strong>
       <p>This attempt uses “{voice.mockText}”, regardless of what you say. No AI calls.</p>
-      <p>{voice.profiles?.liveUsage.enabled?'For real speech, select a live Voice profile and allow the paid attempt before starting the race.':'Live speech is unavailable. Choose Mock mode or play without voice.'}{!configuring?' Restart the race to change its profile.':''}</p>
+      <p>{voice.profiles?.liveUsage.enabled?'For real speech, select a live Voice profile before starting the race.':'Live speech is unavailable. Choose Mock mode or play without voice.'}{!configuring?' Restart the race to change its profile.':''}</p>
     </div>}
-    {voice.live&&<label className="voice-consent"><input type="checkbox" checked={voice.armed} disabled={!configuring||!voice.paidAvailable||!voice.profile?.available} onChange={event=>voice.setArmed(event.target.checked)}/>Allow up to two paid voice attempts this run</label>}
     {voice.profiles&&<p>{voice.profiles.liveUsage.attemptsRemaining} / {voice.profiles.liveUsage.maxAttempts} paid attempts remaining.</p>}
     {voice.error&&<p role="alert">{voice.error}</p>}
     {voice.profile?.unavailableReason&&<p>{voice.profile.unavailableReason}</p>}
@@ -105,7 +101,7 @@ export function RaceMicrophoneSetup({voice}: {voice: RaceVoiceController}) {
         {preparing ? 'Checking microphone…' : microphone.ready && microphone.phase !== 'error' ? 'Check microphone again' : 'Enable microphone'}
       </button>
       <p role="status">{microphone.message}</p>
-      <small>The microphone stays open for this run. Recording starts only when you hold Space. Pausing, restarting, leaving, or finishing releases it. Enabling it does not call AI.</small>
+      <p className="race-microphone-lifecycle">Your microphone stays open for this run. Recording starts only when you hold Space. Pausing, restarting, leaving, or finishing releases it. Enabling it does not call AI.</p>
     </div>;
 }
 
@@ -115,37 +111,57 @@ export function RaceVoiceSetup({voice}: {voice: RaceVoiceController}) {
   const liveProfile = voice.profiles?.profiles.find(profile => profile.mode === 'live' && profile.available);
   const liveEnabled = Boolean(liveProfile && voice.profiles?.transcription?.available && voice.profiles.liveUsage.enabled);
   const preparing = microphone.phase === 'preparing';
-  return <section className="race-voice-setup" aria-labelledby="voice-setup-title">
-    <h2 id="voice-setup-title">Hazard reporting</h2>
-    <RaceMicrophoneSetup voice={voice}/>
-    <label>Creation mode
-      <select aria-label="Creation mode" value={voice.live ? 'live' : 'mock'} disabled={preparing} onChange={event => {
-        voice.setProfileId(event.target.value === 'live' && liveProfile ? liveProfile.id : 'mock');
-      }}>
-        <option value="mock">Mock · prepared creation</option>
-        <option value="live" disabled={!liveEnabled}>Live AI{liveEnabled ? '' : ' · unavailable'}</option>
-      </select>
-    </label>
-    {voice.live ? <>
-      <p>Report a hazard and what it does. AI creates its appearance and a playable drill for everyone. Example: “Nervous hippos scatter when approached.”</p>
-      <label className="voice-consent">
-        <input type="checkbox" checked={voice.armed} disabled={!voice.paidAvailable || !voice.profile?.available}
-          onChange={event => voice.setArmed(event.target.checked)}/>
-        Allow up to two paid voice attempts this run
-      </label>
-      <small>Up to 6 paid API calls. Failed or cancelled requests may still cost credits.</small>
-      <p>{voice.profiles?.liveUsage.attemptsRemaining ?? 0} paid attempts remaining.</p>
-    </> : <>
-      <p className="voice-mode-notice"><strong>Mock mode · speech recognition is off</strong><br/>
-        Uses the prepared prompt below, regardless of what you say. No AI calls.</p>
-      <label>Prepared prompt
-        <select aria-label="Prepared prompt" value={voice.mockText} disabled={preparing} onChange={event => voice.setMockText(event.target.value)}>
-          {safetyDrillFixtures.map(({prompt}) => <option key={prompt}>{prompt}</option>)}
-        </select>
-      </label>
-      {!liveEnabled && <small>Live AI is unavailable for this session.</small>}
-    </>}
-    <button disabled={preparing} onClick={voice.refresh}>Refresh availability</button>
-    <small className="race-voice-limits">Desktop Chrome / Edge · English · 8 s recording maximum.<br/>Keep racing during transcription and creation. The second yellow star is 60–70% down the course, whether the first request succeeds or fails. A slow creation may arrive too late to use before landing.</small>
+  const availabilityError = voice.error || voice.profile?.unavailableReason;
+  const needsRefresh = Boolean(availabilityError || (voice.live && voice.profiles?.liveUsage.busy));
+  return <section className="race-voice-setup" aria-label="Hazard reporting setup">
+    <div className="race-voice-setup-grid">
+      <section className="race-voice-card race-voice-mode-card" aria-labelledby="voice-mode-title">
+        <h2 id="voice-mode-title">Choose a hazard mode</h2>
+        <label>Creation mode
+          <select aria-label="Creation mode" value={voice.live ? 'live' : 'mock'} disabled={preparing} onChange={event => {
+            voice.setProfileId(event.target.value === 'live' && liveProfile ? liveProfile.id : 'mock');
+          }}>
+            <option value="mock">Prepared hazard</option>
+            <option value="live" disabled={!liveEnabled}>Live AI{liveEnabled ? '' : ' · unavailable'}</option>
+          </select>
+        </label>
+        {voice.live ? <>
+          <p>Describe a hazard and what it does. AI creates its appearance and a shared drill.</p>
+          <p className="race-voice-example">Try “Nervous hippos scatter when approached.”</p>
+          <p className="race-voice-cost">Live AI uses up to two attempts / six paid API calls per run. Failed or cancelled requests may still cost credits.</p>
+          <p>{voice.profiles?.liveUsage.attemptsRemaining ?? 0} paid attempts remaining.</p>
+        </> : <>
+          <div className="voice-mode-notice" role="note">
+            <strong>Speech recognition is off.</strong>
+            <p>Uses this prepared hazard, regardless of what you say. No AI calls.</p>
+            <p className="race-prepared-prompt">“{voice.mockText}”</p>
+          </div>
+          <details className="race-voice-details">
+            <summary>Change prepared hazard</summary>
+            <label>Prepared prompt
+              <select aria-label="Prepared prompt" value={voice.mockText} disabled={preparing} onChange={event => voice.setMockText(event.target.value)}>
+                {safetyDrillFixtures.map(({prompt}) => <option key={prompt}>{prompt}</option>)}
+              </select>
+            </label>
+          </details>
+          {!liveEnabled && <p className="race-voice-availability">Live AI is unavailable for this session.</p>}
+        </>}
+      </section>
+      <section className="race-voice-card race-voice-microphone-card" aria-labelledby="voice-microphone-title">
+        <h2 id="voice-microphone-title">Enable your microphone</h2>
+        <RaceMicrophoneSetup voice={voice}/>
+      </section>
+    </div>
+    {needsRefresh && <div className="race-voice-error">
+      {availabilityError && <p role="alert">{availabilityError}</p>}
+      <button disabled={preparing} onClick={voice.refresh}>Refresh availability</button>
+    </div>}
+    <details className="race-voice-details">
+      <summary>Voice details</summary>
+      <p>Desktop Chrome / Edge · English · 8 seconds of recording maximum.</p>
+      <p>Transcription has a 10-second limit; creation has a 30-second limit. Keep racing while your hazard is prepared. A slow creation may arrive too late to use before landing.</p>
+      <p>The second yellow star appears 60–70% down the course, whether the first request succeeds or fails. Pausing cancels an active attempt and a saved second request.</p>
+      {!needsRefresh && <button disabled={preparing} onClick={voice.refresh}>Refresh availability</button>}
+    </details>
   </section>;
 }
